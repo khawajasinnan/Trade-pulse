@@ -1,0 +1,192 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BasicUser
+  Trader
+  Admin
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED
+}
+
+enum AlertCondition {
+  GREATER_THAN
+  LESS_THAN
+  GREATER_EQUAL
+  LESS_EQUAL
+}
+
+enum Sentiment {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+enum PredictionDirection {
+  UP
+  DOWN
+  NEUTRAL
+}
+
+// User model with role-based access
+model User {
+  id                String          @id @default(uuid())
+  name              String
+  email             String          @unique
+  passwordHash      String          @map("password_hash")
+  role              UserRole        @default(BasicUser)
+  banned            Boolean         @default(false)
+  failedLoginCount  Int             @default(0) @map("failed_login_count")
+  lastLoginAt       DateTime?       @map("last_login_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  loginAttempts     LoginAttempt[]
+  portfolios        Portfolio[]
+  alerts            Alert[]
+  
+  @@map("users")
+}
+
+// Login attempt tracking for security
+model LoginAttempt {
+  id          String      @id @default(uuid())
+  userId      String?     @map("user_id")
+  email       String
+  ipAddress   String      @map("ip_address")
+  userAgent   String?     @map("user_agent")
+  status      LoginStatus
+  timestamp   DateTime    @default(now())
+  
+  // Relations
+  user        User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([email])
+  @@index([ipAddress])
+  @@index([timestamp])
+  @@map("login_attempts")
+}
+
+// Currency master data
+model Currency {
+  id          String   @id @default(uuid())
+  symbol      String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  @@map("currencies")
+}
+
+// Real-time exchange rates
+model ExchangeRate {
+  id             String   @id @default(uuid())
+  baseCurrency   String   @map("base_currency")
+  targetCurrency String   @map("target_currency")
+  rate           Float
+  timestamp      DateTime @default(now())
+  
+  @@index([baseCurrency, targetCurrency])
+  @@index([timestamp])
+  @@map("exchange_rates")
+}
+
+// Historical forex data for charts
+model HistoricalData {
+  id           String   @id @default(uuid())
+  currencyPair String   @map("currency_pair")
+  open         Float
+  close        Float
+  high         Float
+  low          Float
+  volume       Float?
+  date         DateTime
+  
+  @@index([currencyPair])
+  @@index([date])
+  @@unique([currencyPair, date])
+  @@map("historical_data")
+}
+
+// User portfolio holdings
+model Portfolio {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  currency      String
+  amount        Float
+  purchasePrice Float    @map("purchase_price")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("portfolio")
+}
+
+// Price alerts
+model Alert {
+  id            String         @id @default(uuid())
+  userId        String         @map("user_id")
+  currencyPair  String         @map("currency_pair")
+  conditionType AlertCondition @map("condition_type")
+  targetValue   Float          @map("target_value")
+  triggered     Boolean        @default(false)
+  triggeredAt   DateTime?      @map("triggered_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  
+  // Relations
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([triggered])
+  @@map("alerts")
+}
+
+// Financial news with sentiment
+model News {
+  id            String    @id @default(uuid())
+  title         String
+  description   String    @db.Text
+  sentiment     Sentiment
+  sentimentScore Float    @map("sentiment_score")
+  currencyPair  String?   @map("currency_pair")
+  source        String?
+  url           String?
+  publishedAt   DateTime  @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  @@index([sentiment])
+  @@index([publishedAt])
+  @@index([currencyPair])
+  @@map("news")
+}
+
+// ML predictions
+model Prediction {
+  id             String              @id @default(uuid())
+  currencyPair   String              @map("currency_pair")
+  predictedValue Float               @map("predicted_value")
+  direction      PredictionDirection
+  confidence     Float
+  modelVersion   String              @map("model_version")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  
+  @@index([currencyPair])
+  @@index([createdAt])
+  @@map("predictions")
+}

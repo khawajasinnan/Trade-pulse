@@ -1,0 +1,38 @@
+{
+    // Disable CSS validation entirely for Tailwind
+    "css.validate": false,
+    "scss.validate": false,
+    "less.validate": false,
+    // Ignore unknown at-rules
+    "css.lint.unknownAtRules": "ignore",
+    // Tailwind CSS IntelliSense
+    "tailwindCSS.experimental.classRegex": [
+        [
+            "cva\\(([^)]*)\\)",
+            "[\"'`]([^\"'`]*).*?[\"'`]"
+        ],
+        [
+            "cx\\(([^)]*)\\)",
+            "(?:'|\"|`)([^']*)(?:'|\"|`)"
+        ],
+        "(?:className|class)\\s*[=:]\\s*['\"`]([^'\"`]*)['\"`]"
+    ],
+    // Tell VSCode to treat CSS files as Tailwind CSS
+    "files.associations": {
+        "*.css": "tailwindcss"
+    },
+    // Enable autocomplete in string literals
+    "editor.quickSuggestions": {
+        "strings": "on"
+    },
+    // Tailwind language support
+    "tailwindCSS.includeLanguages": {
+        "typescript": "javascript",
+        "typescriptreact": "javascript"
+    },
+    // Disable other CSS linters that might interfere
+    "stylelint.enable": false,
+    // Format on save
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+}
