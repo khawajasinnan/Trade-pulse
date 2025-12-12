@@ -19,43 +19,73 @@ export const getPortfolio = async (req: AuthRequest, res: Response) => {
             orderBy: { createdAt: 'desc' },
         });
 
-        // Calculate current values and profit/loss
-        const enrichedPortfolio = await Promise.all(
+        // Fetch current rates for each holding
+        const holdingsWithRates = await Promise.all(
             portfolio.map(async (holding) => {
                 try {
-                    const currentRate = await getRealTimeRate('USD', holding.currency);
+                    // Parse currency pair (e.g., "EUR/USD" -> from="EUR", to="USD")
+                    // Decode HTML entities first (e.g., "EUR&#x2F;USD" -> "EUR/USD")
+                    let currencyPair = holding.currency
+                        .replace(/&#x2F;/g, '/')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&#x27;/g, "'");
+
+                    let currentRate = 1.0;
+
+                    if (currencyPair.includes('/')) {
+                        const [fromCurrency, toCurrency] = currencyPair.split('/');
+                        currentRate = await getRealTimeRate(fromCurrency, toCurrency);
+                    } else {
+                        // If it's a single currency, assume USD as base
+                        currentRate = await getRealTimeRate('USD', currencyPair);
+                    }
+
                     const currentValue = holding.amount * currentRate;
                     const purchaseValue = holding.amount * holding.purchasePrice;
                     const profitLoss = currentValue - purchaseValue;
-                    const profitLossPercent = (profitLoss / purchaseValue) * 100;
+                    const profitLossPercentage =
+                        purchaseValue > 0 ? (profitLoss / purchaseValue) * 100 : 0;
 
                     return {
-                        ...holding,
-                        currentRate,
+                        id: holding.id,
+                        currency: holding.currency,
+                        amount: holding.amount,
+                        purchasePrice: holding.purchasePrice,
+                        currentPrice: currentRate,
                         currentValue,
                         purchaseValue,
                         profitLoss,
-                        profitLossPercent,
+                        profitLossPercentage,
+                        purchasedAt: holding.createdAt,
                     };
                 } catch (error) {
+                    console.error(
+                        `Failed to fetch rate for ${holding.currency}:`,
+                        error
+                    );
+                    // Return holding with fallback data
                     return {
-                        ...holding,
-                        currentRate: holding.purchasePrice,
+                        id: holding.id,
+                        currency: holding.currency,
+                        amount: holding.amount,
+                        purchasePrice: holding.purchasePrice,
+                        currentPrice: holding.purchasePrice,
                         currentValue: holding.amount * holding.purchasePrice,
                         purchaseValue: holding.amount * holding.purchasePrice,
                         profitLoss: 0,
-                        profitLossPercent: 0,
+                        profitLossPercentage: 0,
+                        purchasedAt: holding.createdAt,
                     };
                 }
             })
         );
 
         // Calculate totals
-        const totalCurrentValue = enrichedPortfolio.reduce(
+        const totalCurrentValue = holdingsWithRates.reduce(
             (sum, h) => sum + h.currentValue,
             0
         );
-        const totalPurchaseValue = enrichedPortfolio.reduce(
+        const totalPurchaseValue = holdingsWithRates.reduce(
             (sum, h) => sum + h.purchaseValue,
             0
         );
@@ -64,13 +94,14 @@ export const getPortfolio = async (req: AuthRequest, res: Response) => {
             totalPurchaseValue > 0 ? (totalProfitLoss / totalPurchaseValue) * 100 : 0;
 
         return res.json({
-            portfolio: enrichedPortfolio,
+            holdings: holdingsWithRates,
             summary: {
                 totalCurrentValue,
+                totalHoldings: holdingsWithRates.length,
                 totalPurchaseValue,
                 totalProfitLoss,
                 totalProfitLossPercent,
-                holdings: enrichedPortfolio.length,
+                holdings: holdingsWithRates.length,
             },
         });
     } catch (error) {
@@ -88,24 +119,127 @@ export const addToPortfolio = async (req: AuthRequest, res: Response) => {
             return res.status(401).json({ error: 'Not authenticated' });
         }
 
-        const { currency, amount, purchasePrice } = req.body;
+        let { currency, amount, purchasePrice } = req.body;
 
-        // Verify currency exists
-        const currencyExists = await prisma.currency.findUnique({
-            where: { symbol: currency },
+        // Decode HTML entities in currency (e.g., "EUR&#x2F;USD" -> "EUR/USD")
+        currency = currency
+            .replace(/&#x2F;/g, '/')
+            .replace(/&amp;/g, '&')
+            .replace(/&#x27;/g, "'");
+
+        console.log('Add to portfolio request:', {
+            currency,
+            amount,
+            purchasePrice,
+            userId: req.user.id,
         });
 
-        if (!currencyExists) {
-            return res.status(404).json({ error: 'Currency not found' });
+        // Validate input
+        if (!currency || currency.trim() === '') {
+            return res.status(400).json({ error: 'Currency is required' });
         }
 
-        // Add to portfolio
+        if (amount === undefined || amount === null) {
+            return res.status(400).json({ error: 'Amount is required' });
+        }
+
+        if (purchasePrice === undefined || purchasePrice === null) {
+            return res.status(400).json({ error: 'Purchase price is required' });
+        }
+
+        const parsedAmount = parseFloat(amount);
+        const parsedPrice = parseFloat(purchasePrice);
+
+        if (isNaN(parsedAmount)) {
+            return res.status(400).json({ error: 'Amount must be a valid number' });
+        }
+
+        if (isNaN(parsedPrice) || parsedPrice <= 0) {
+            return res.status(400).json({ error: 'Purchase price must be a valid positive number' });
+        }
+
+        // Check if selling (negative amount)
+        if (parsedAmount < 0) {
+            const existingHolding = await prisma.portfolio.findFirst({
+                where: {
+                    userId: req.user.id,
+                    currency,
+                },
+            });
+
+            if (!existingHolding) {
+                return res.status(400).json({
+                    error: `Cannot sell ${currency} - you do not own this currency`,
+                });
+            }
+
+            if (existingHolding.amount < Math.abs(parsedAmount)) {
+                return res.status(400).json({
+                    error: `Cannot sell ${Math.abs(parsedAmount)} units - you only have ${existingHolding.amount} units of ${currency}`,
+                });
+            }
+        }
+
+        // Check if user already has this currency in portfolio
+        const existingHolding = await prisma.portfolio.findFirst({
+            where: {
+                userId: req.user.id,
+                currency,
+            },
+        });
+
+        if (existingHolding) {
+            // Update existing holding
+            const totalUnits = existingHolding.amount + parsedAmount;
+
+            // If selling all or more than available, delete the holding
+            if (totalUnits <= 0) {
+                await prisma.portfolio.delete({
+                    where: { id: existingHolding.id },
+                });
+
+                return res.json({
+                    message: 'Holding removed from portfolio',
+                    holding: null,
+                });
+            }
+
+            // Otherwise, update with weighted average price (only for buys)
+            let newAvgPrice = existingHolding.purchasePrice;
+            if (parsedAmount > 0) {
+                // BUY: Calculate weighted average
+                const totalCost = (existingHolding.amount * existingHolding.purchasePrice) + (parsedAmount * parsedPrice);
+                newAvgPrice = totalCost / totalUnits;
+            }
+            // For SELL: Keep existing average price
+
+            const updated = await prisma.portfolio.update({
+                where: { id: existingHolding.id },
+                data: {
+                    amount: totalUnits,
+                    purchasePrice: newAvgPrice,
+                },
+            });
+
+            return res.json({
+                message: 'Portfolio updated successfully',
+                holding: updated,
+            });
+        }
+
+        // Add new holding to portfolio (only if positive amount)
+        if (parsedAmount <= 0) {
+            return res.status(400).json({
+                error: 'Cannot sell a currency you do not own'
+            });
+        }
+
         const holding = await prisma.portfolio.create({
             data: {
                 userId: req.user.id,
                 currency,
-                amount,
-                purchasePrice,
+                amount: parsedAmount,
+                purchasePrice: parsedPrice,
             },
         });
 

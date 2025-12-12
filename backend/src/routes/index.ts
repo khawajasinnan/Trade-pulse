@@ -1,17 +1,16 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import * as authController from '../controllers/auth.controller';
 import * as dashboardController from '../controllers/dashboard.controller';
 import * as portfolioController from '../controllers/portfolio.controller';
 import * as alertsController from '../controllers/alerts.controller';
 import * as adminController from '../controllers/admin.controller';
-import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
+import { requireAuth, requireAdmin, requireTrader, AuthRequest } from '../middleware/auth.middleware';
 import { loginRateLimiter, signupRateLimiter, apiRateLimiter } from '../middleware/rate-limiter.middleware';
 import { validate } from '../middleware/validation.middleware';
 import * as schemas from '../middleware/validation.middleware';
 import { PrismaClient } from '@prisma/client';
 import { getRealTimeRate, getHistoricalDataFromDB } from '../services/forex.service';
 import { fetchFinancialNews, getNewsFromDB } from '../services/news.service';
-import { trainAndPredict, getLatestPrediction } from '../services/prediction.service';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -30,8 +29,8 @@ router.post('/auth/change-password', requireAuth, authController.changePassword)
 
 // ========== DASHBOARD ROUTES ==========
 router.get('/dashboard', apiRateLimiter, dashboardController.getDashboardData);
+router.get('/dashboard/stats', apiRateLimiter, dashboardController.getMarketStatsEndpoint);
 router.get('/dashboard/heatmap', apiRateLimiter, dashboardController.getHeatmapData);
-router.get('/dashboard/stats', apiRateLimiter, dashboardController.getMarketStats);
 
 // ========== CURRENCY CONVERTER ==========
 router.get('/converter', apiRateLimiter, async (req, res) => {
@@ -78,12 +77,17 @@ router.get('/historical/:currencyPair', apiRateLimiter, async (req, res) => {
     }
 });
 
-// ========== PORTFOLIO ROUTES ==========
-router.get('/portfolio', requireAuth, portfolioController.getPortfolio);
-router.post('/portfolio', requireAuth, validate(schemas.addPortfolioSchema), portfolioController.addToPortfolio);
-router.put('/portfolio/:id', requireAuth, validate(schemas.updatePortfolioSchema), portfolioController.updatePortfolioHolding);
-router.delete('/portfolio/:id', requireAuth, portfolioController.deletePortfolioHolding);
-router.get('/portfolio/analytics', requireAuth, portfolioController.getPortfolioAnalytics);
+// ========== PORTFOLIO ROUTES (Trader/Admin Only) ==========
+router.get('/portfolio', requireAuth, requireTrader, portfolioController.getPortfolio);
+router.post('/portfolio', requireAuth, requireTrader, portfolioController.addToPortfolio);
+router.put('/portfolio/:id', requireAuth, requireTrader, validate(schemas.updatePortfolioSchema), portfolioController.updatePortfolioHolding);
+router.delete('/portfolio/:id', requireAuth, requireTrader, portfolioController.deletePortfolioHolding);
+router.get('/portfolio/analytics', requireAuth, requireTrader, portfolioController.getPortfolioAnalytics);
+
+// ========== EXPORT ROUTES (Trader Only) ==========
+import * as exportController from '../controllers/export.controller';
+router.get('/export/excel', requireAuth, requireTrader, exportController.exportToExcel);
+router.get('/export/pdf', requireAuth, requireTrader, exportController.exportToPDF);
 
 // ========== ALERTS ROUTES ==========
 router.get('/alerts', requireAuth, alertsController.getAlerts);
@@ -116,29 +120,137 @@ router.post('/news/fetch', requireAdmin, async (_req, res) => {
     }
 });
 
-// ========== PREDICTIONS ==========
-router.get('/predictions/:currencyPair', apiRateLimiter, async (req, res) => {
+// Sentiment analysis routes
+import * as sentimentController from '../controllers/sentiment.controller';
+router.get('/sentiment', apiRateLimiter, sentimentController.getSentimentNews);
+router.get('/sentiment/:pair', apiRateLimiter, sentimentController.getCurrencySentiment);
+
+// Server-Sent Events endpoint for live rates
+router.get('/events', apiRateLimiter, async (req, res: Response) => {
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders && res.flushHeaders();
+
+    // Send a comment to establish the stream
+    res.write(': connected\n\n');
+
+    let timer: NodeJS.Timeout | null = null;
+
+    const sendRates = async () => {
+        try {
+            // Pairs to broadcast
+            const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD'];
+            const rates: Record<string, number> = {};
+
+            await Promise.all(pairs.map(async (p) => {
+                const [from, to] = p.includes('/') ? p.split('/') : p.split('-');
+                try {
+                    const rate = await getRealTimeRate(from, to);
+                    rates[p] = rate;
+                } catch (e) {
+                    console.error('SSE rate fetch failed for', p, e);
+                }
+            }));
+
+            const payload = { timestamp: new Date().toISOString(), rates };
+            res.write(`event: rates\ndata: ${JSON.stringify(payload)}\n\n`);
+        } catch (error) {
+            console.error('SSE sendRates error:', error);
+            res.write(`event: error\ndata: ${JSON.stringify({ message: String(error) })}\n\n`);
+        }
+    };
+
+    // Send immediately then poll every 5s
+    sendRates();
+    timer = setInterval(sendRates, 5000);
+
+    req.on('close', () => {
+        if (timer) clearInterval(timer);
+        res.end();
+    });
+});
+
+// ========== PREDICTIONS ROUTES ==========
+import { trainAndPredict } from '../services/prediction.service';
+
+router.get('/predictions/:currencyPair', requireAuth, requireTrader, async (req: AuthRequest, res: Response) => {
     try {
         const { currencyPair } = req.params;
 
-        // Check for existing recent prediction
-        const existing = await getLatestPrediction(currencyPair);
+        // Get current rate
+        const currentRate = await getRealTimeRate(
+            currencyPair.split('-')[0],
+            currencyPair.split('-')[1]
+        );
 
-        if (existing && existing.isRecent) {
-            return res.json({ prediction: existing });
+        // Check for recent cached prediction (within last 12 hours)
+        const cachedPrediction = await prisma.prediction.findFirst({
+            where: { currencyPair },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours
+        const isCacheValid = cachedPrediction &&
+            (Date.now() - cachedPrediction.createdAt.getTime() < CACHE_DURATION);
+
+        if (isCacheValid) {
+            // Use cached prediction
+            const change = ((cachedPrediction.predictedValue - currentRate) / currentRate) * 100;
+            let recommendation: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
+            if (change > 0.5) recommendation = 'BUY';
+            else if (change < -0.5) recommendation = 'SELL';
+
+            return res.json({
+                prediction: {
+                    currencyPair,
+                    predictedValue: cachedPrediction.predictedValue,
+                    currentRate,
+                    direction: cachedPrediction.direction,
+                    confidence: cachedPrediction.confidence,
+                    recommendation,
+                    cached: true,
+                    predictedAt: cachedPrediction.createdAt,
+                }
+            });
         }
 
-        // Generate new prediction (this may take time)
-        const prediction = await trainAndPredict(currencyPair);
+        // No valid cache - train and predict with ML model
+        console.log(`Training ML model for ${currencyPair}...`);
+        const mlResult = await trainAndPredict(currencyPair);
 
-        return res.json({ prediction });
+        // Store new prediction in database
+        await prisma.prediction.create({
+            data: {
+                currencyPair,
+                predictedValue: mlResult.predictedValue,
+                direction: mlResult.direction,
+                confidence: mlResult.confidence,
+                modelVersion: '1.0',
+            },
+        });
+
+        return res.json({
+            prediction: {
+                currencyPair,
+                predictedValue: mlResult.predictedValue,
+                currentRate,
+                direction: mlResult.direction,
+                confidence: mlResult.confidence,
+                recommendation: mlResult.recommendation,
+                cached: false,
+                predictedAt: new Date(),
+            }
+        });
+
     } catch (error) {
         console.error('Prediction error:', error);
-        return res.status(500).json({ error: 'Failed to generate prediction' });
+        return res.status(500).json({ error: 'Failed to fetch predictions' });
     }
 });
 
-router.get('/predictions', apiRateLimiter, async (req, res) => {
+router.get('/predictions', requireAuth, requireTrader, apiRateLimiter, async (req, res) => {
     try {
         const limit = parseInt(req.query.limit as string) || 10;
 

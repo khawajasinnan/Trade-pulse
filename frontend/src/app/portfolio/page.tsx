@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import UpgradePrompt from '../../components/UpgradePrompt';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Card from '../../components/Card';
 import { Wallet, TrendingUp, TrendingDown, Plus, ArrowUpRight, ArrowDownRight, DollarSign } from 'lucide-react';
@@ -29,59 +30,46 @@ interface Transaction {
 }
 
 export default function PortfolioPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { user } = useAuth();
     const [holdings, setHoldings] = useState<Holding[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [showBuyModal, setShowBuyModal] = useState(false);
-
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-        }
-    }, [isAuthenticated, authLoading, router]);
-
-    useEffect(() => {
-        if (isAuthenticated) {
-            fetchPortfolio();
-        }
-    }, [isAuthenticated]);
+    const [selectedCurrency, setSelectedCurrency] = useState('EUR/USD');
+    const [liveRate, setLiveRate] = useState<number | null>(null);
+    const [tradeAmount, setTradeAmount] = useState<number>(0);
+    const [fetchingRate, setFetchingRate] = useState(false);
 
     const fetchPortfolio = async () => {
         setLoading(true);
-        // Simulate API call - replace with actual API
-        setTimeout(() => {
-            setHoldings([
-                {
-                    currency: 'EUR/USD',
-                    amount: 5000,
-                    avgBuyPrice: 1.0850,
-                    currentPrice: 1.0945,
-                    value: 5475,
-                    profitLoss: 475,
-                    profitLossPercent: 8.76,
-                },
-                {
-                    currency: 'GBP/USD',
-                    amount: 3000,
-                    avgBuyPrice: 1.2800,
-                    currentPrice: 1.2678,
-                    value: 3803.4,
-                    profitLoss: -365.4,
-                    profitLossPercent: -9.6,
-                },
-                {
-                    currency: 'USD/JPY',
-                    amount: 2000,
-                    avgBuyPrice: 148.50,
-                    currentPrice: 149.85,
-                    value: 2018.18,
-                    profitLoss: 18.18,
-                    profitLossPercent: 0.91,
-                },
-            ]);
+        try {
+            // Fetch portfolio from backend API
+            const response = await fetch('/api/portfolio', {
+                credentials: 'include',
+            });
 
+            if (!response.ok) {
+                throw new Error('Failed to fetch portfolio');
+            }
+
+            const data = await response.json();
+
+            // Transform backend data to frontend format
+            if (data.holdings) {
+                const transformedHoldings = data.holdings.map((item: any) => ({
+                    currency: item.currency,
+                    amount: item.amount,
+                    avgBuyPrice: item.purchasePrice,
+                    currentPrice: item.currentPrice || item.purchasePrice,
+                    value: item.currentValue || item.amount * item.purchasePrice,
+                    profitLoss: item.profitLoss || 0,
+                    profitLossPercent: item.profitLossPercentage || 0,
+                }));
+
+                setHoldings(transformedHoldings);
+            }
+
+            // Fetch recent transactions (mock for now - can be added to backend later)
             setTransactions([
                 {
                     id: '1',
@@ -101,34 +89,66 @@ export default function PortfolioPage() {
                     total: 3840,
                     timestamp: '2024-11-28T14:15:00Z',
                 },
-                {
-                    id: '3',
-                    type: 'SELL',
-                    currency: 'AUD/USD',
-                    amount: 1500,
-                    price: 0.6620,
-                    total: 993,
-                    timestamp: '2024-11-25T09:45:00Z',
-                },
             ]);
+        } catch (error) {
+            console.error('Error fetching portfolio:', error);
+            // Fallback to empty state on error
+            setHoldings([]);
+            setTransactions([]);
+        } finally {
             setLoading(false);
-        }, 800);
+        }
     };
 
-    if (authLoading || !isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <LoadingSpinner size="lg" />
-            </div>
-        );
-    }
+    // Fetch live rate when currency changes
+    const fetchLiveRate = async (currency: string) => {
+        setFetchingRate(true);
+        try {
+            const [from, to] = currency.split('/');
+            const response = await fetch(
+                `/api/converter?from=${from}&to=${to}&amount=1`,
+                { credentials: 'include' }
+            );
+            const data = await response.json();
+            setLiveRate(data.convertedAmount || 1);
+        } catch (error) {
+            console.error('Failed to fetch live rate:', error);
+            setLiveRate(1);
+        } finally {
+            setFetchingRate(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPortfolio();
+    }, []);
+
+    // Fetch live rate when modal opens
+    useEffect(() => {
+        if (showBuyModal) {
+            fetchLiveRate(selectedCurrency);
+        }
+    }, [showBuyModal]);
 
     const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
     const totalPL = holdings.reduce((sum, h) => sum + h.profitLoss, 0);
     const totalPLPercent = (totalPL / (totalValue - totalPL)) * 100;
 
+    // BasicUser restriction - show upgrade prompt
+    if (user?.role === 'BasicUser') {
+        return (
+            <ProtectedRoute>
+                <Navbar />
+                <UpgradePrompt
+                    feature="Portfolio Management"
+                    description="Track your forex holdings, manage virtual positions, and monitor your profit/loss with advanced analytics"
+                />
+            </ProtectedRoute>
+        );
+    }
+
     return (
-        <>
+        <ProtectedRoute>
             <Navbar />
             <div className="min-h-screen pt-20 pb-12">
                 <div className="container mx-auto px-4">
@@ -143,7 +163,7 @@ export default function PortfolioPage() {
                         </div>
                         <button
                             onClick={() => setShowBuyModal(true)}
-                            className="btn-primary flex items-center gap-2"
+                            className="btn-primary flex items-center gap-2 currency-cursor"
                         >
                             <Plus className="w-5 h-5" />
                             New Trade
@@ -218,8 +238,8 @@ export default function PortfolioPage() {
                                                 <p className="text-sm text-gray-600">{holding.amount.toFixed(0)} units</p>
                                             </div>
                                             <div className={`px-3 py-1 rounded-lg text-sm font-bold ${holding.profitLoss >= 0
-                                                    ? 'bg-success-light/30 text-success'
-                                                    : 'bg-danger-light/30 text-danger'
+                                                ? 'bg-success-light/30 text-success'
+                                                : 'bg-danger-light/30 text-danger'
                                                 }`}>
                                                 {holding.profitLoss >= 0 ? '+' : ''}{holding.profitLossPercent.toFixed(2)}%
                                             </div>
@@ -270,8 +290,8 @@ export default function PortfolioPage() {
                                                 <tr key={tx.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
                                                     <td className="py-3 px-4">
                                                         <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm font-bold ${tx.type === 'BUY'
-                                                                ? 'bg-success-light/30 text-success'
-                                                                : 'bg-danger-light/30 text-danger'
+                                                            ? 'bg-success-light/30 text-success'
+                                                            : 'bg-danger-light/30 text-danger'
                                                             }`}>
                                                             {tx.type === 'BUY' ? (
                                                                 <ArrowDownRight className="w-4 h-4" />
@@ -297,7 +317,175 @@ export default function PortfolioPage() {
                         </>
                     )}
                 </div>
+
+                {/* Buy/Sell Modal */}
+                {showBuyModal && (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <Card variant="glass" className="max-w-md w-full">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-2xl font-bold text-gray-900">New Trade</h3>
+                                <button
+                                    onClick={() => setShowBuyModal(false)}
+                                    className="text-gray-500 hover:text-gray-700 transition"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <form
+                                onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const formData = new FormData(e.currentTarget);
+                                    const type = formData.get('type') as 'BUY' | 'SELL';
+
+                                    // Use live rate instead of manual input
+                                    if (!liveRate) {
+                                        alert('Please wait for live rate to load');
+                                        return;
+                                    }
+
+                                    try {
+                                        // Add to backend portfolio
+                                        const response = await fetch('/api/portfolio', {
+                                            method: 'POST',
+                                            credentials: 'include',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                            },
+                                            body: JSON.stringify({
+                                                currency: selectedCurrency,
+                                                amount: type === 'BUY' ? tradeAmount : -tradeAmount,
+                                                purchasePrice: liveRate,
+                                            }),
+                                        });
+
+                                        if (!response.ok) {
+                                            const error = await response.json();
+                                            throw new Error(error.error || 'Failed to add trade');
+                                        }
+
+                                        // Add new transaction to list
+                                        const newTransaction: Transaction = {
+                                            id: Date.now().toString(),
+                                            type,
+                                            currency: selectedCurrency,
+                                            amount: tradeAmount,
+                                            price: liveRate,
+                                            total: tradeAmount * liveRate,
+                                            timestamp: new Date().toISOString(),
+                                        };
+
+                                        setTransactions([newTransaction, ...transactions]);
+                                        setShowBuyModal(false);
+
+                                        // Refresh portfolio to get updated totals
+                                        await fetchPortfolio();
+
+                                        alert(`${type} order placed successfully!`);
+                                    } catch (error: any) {
+                                        console.error('Trade error:', error);
+                                        alert(error.message || 'Failed to place trade. Please try again.');
+                                    }
+                                }}
+                                className="space-y-4"
+                            >
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Type
+                                    </label>
+                                    <select
+                                        name="type"
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                    >
+                                        <option value="BUY">BUY</option>
+                                        <option value="SELL">SELL</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Currency Pair
+                                    </label>
+                                    <select
+                                        name="currency"
+                                        value={selectedCurrency}
+                                        onChange={(e) => {
+                                            setSelectedCurrency(e.target.value);
+                                            fetchLiveRate(e.target.value);
+                                        }}
+                                        required
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                    >
+                                        <option value="EUR/USD">EUR/USD</option>
+                                        <option value="GBP/USD">GBP/USD</option>
+                                        <option value="USD/JPY">USD/JPY</option>
+                                        <option value="AUD/USD">AUD/USD</option>
+                                        <option value="USD/CAD">USD/CAD</option>
+                                        <option value="NZD/USD">NZD/USD</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Amount (units)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="amount"
+                                        value={tradeAmount || ''}
+                                        onChange={(e) => setTradeAmount(parseFloat(e.target.value) || 0)}
+                                        required
+                                        min="1"
+                                        step="1"
+                                        placeholder="1000"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                    />
+                                </div>
+
+                                {/* Live Rate Display */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-medium text-gray-700">Current Market Rate</span>
+                                        {fetchingRate && <span className="text-xs text-blue-600">Fetching...</span>}
+                                    </div>
+                                    <div className="text-2xl font-bold text-gray-900">
+                                        {liveRate ? liveRate.toFixed(4) : '-'}
+                                    </div>
+                                    {liveRate && tradeAmount > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-blue-200">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Total Value</span>
+                                                <span className="font-bold text-gray-900">
+                                                    ${(liveRate * tradeAmount).toFixed(2)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowBuyModal(false)}
+                                        className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition currency-cursor"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 btn-primary currency-cursor"
+                                    >
+                                        Place Order
+                                    </button>
+                                </div>
+                            </form>
+                        </Card>
+                    </div>
+                )}
             </div>
-        </>
+        </ProtectedRoute>
     );
 }

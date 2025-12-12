@@ -16,7 +16,7 @@ export default function Card({ children, className = '', variant = 'default', ho
         flat: 'card-flat',
     };
 
-    const hoverClass = hover ? 'hover:shadow-xl hover:-translate-y-1' : '';
+    const hoverClass = hover ? 'hover:shadow-xl hover:-translate-y-1 currency-cursor' : '';
 
     return (
         <div className={`${variantClasses[variant]} ${hoverClass} ${className}`} style={style}>

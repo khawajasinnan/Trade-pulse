@@ -63,14 +63,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signup = async (name: string, email: string, password: string, role?: string) => {
         try {
-            const response = await authAPI.signup({ name, email, password, role });
-            const { user, token } = response.data;
+            const response = await fetch('/api/auth/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ name, email, password, role: role || 'BasicUser' }),
+            });
 
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-            setUser(user);
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Extract detailed validation errors if available
+                if (data.details && Array.isArray(data.details)) {
+                    const errorMessages = data.details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
+                    throw new Error(errorMessages);
+                }
+                throw new Error(data.error || 'Signup failed');
+            }
+
+            setUser(data.user);
         } catch (error: any) {
-            throw new Error(error.response?.data?.error || 'Signup failed');
+            throw new Error(error.message || 'Signup failed');
         }
     };
 

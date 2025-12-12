@@ -1,170 +1,97 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { getRealTimeRate, getTopMovers, calculate24hChange } from '../services/forex.service';
+import { getRealTimeRate } from '../services/forex.service';
+import { getMarketDashboardData, getMarketStats } from '../services/market-analytics.service';
 
 const prisma = new PrismaClient();
 
 /**
- * Get dashboard data with live rates and market overview
+ * Get dashboard data with REAL-TIME market information
  */
-export const getDashboardData = async (req: Request, res: Response) => {
+export const getDashboardData = async (_req: Request, res: Response) => {
     try {
-        const baseCurrency = (req.query.base as string) || 'USD';
+        // Fetch live market data from APIs
+        const marketData = await getMarketDashboardData();
 
-        // Get all currencies except base
-        const currencies = await prisma.currency.findMany({
-            where: {
-                symbol: {
-                    not: baseCurrency,
-                },
-            },
+        // Get news sentiment summary
+        const newsCount = await prisma.news.count();
+        const positiveSentiment = await prisma.news.count({
+            where: { sentiment: 'POSITIVE' },
+        });
+        const negativeSentiment = await prisma.news.count({
+            where: { sentiment: 'NEGATIVE' },
         });
 
-        // Fetch live rates
-        const liveRates: any[] = [];
-
-        for (const currency of currencies.slice(0, 12)) {
-            // Limit to 12 for performance
-            try {
-                const rate = await getRealTimeRate(baseCurrency, currency.symbol);
-                const currencyPair = `${baseCurrency}/${currency.symbol}`;
-                const change24h = await calculate24hChange(currencyPair);
-
-                liveRates.push({
-                    currencyPair,
-                    baseCurrency,
-                    targetCurrency: currency.symbol,
-                    name: currency.name,
-                    rate,
-                    change24h,
-                    trend: change24h > 0 ? 'up' : change24h < 0 ? 'down' : 'neutral',
-                });
-            } catch (error) {
-                console.error(`Failed to fetch rate for ${currency.symbol}`);
-            }
-        }
-
-        // Get top gainers and losers
-        const { gainers, losers } = await getTopMovers(baseCurrency, 5);
-
-        // Calculate market summary
-        const totalPairs = liveRates.length;
-        const positiveMovers = liveRates.filter((r) => r.change24h > 0).length;
-        const negativeMovers = liveRates.filter((r) => r.change24h < 0).length;
-
-        const marketSummary = {
-            totalPairs,
-            positiveMovers,
-            negativeMovers,
-            neutralMovers: totalPairs - positiveMovers - negativeMovers,
-            marketSentiment:
-                positiveMovers > negativeMovers
-                    ? 'bullish'
-                    : positiveMovers < negativeMovers
-                        ? 'bearish'
-                        : 'neutral',
-        };
-
-        res.json({
-            baseCurrency,
-            liveRates,
-            topGainers: gainers,
-            topLosers: losers,
-            marketSummary,
-            lastUpdated: new Date(),
+        return res.json({
+            currencyPairs: marketData.gainers.concat(marketData.losers),
+            gainers: marketData.gainers,
+            losers: marketData.losers,
+            stats: {
+                totalPairs: marketData.stats.totalPairs,
+                positiveMovers: marketData.stats.positiveMovers,
+                negativeMovers: marketData.stats.negativeMovers,
+                sentiment: marketData.stats.sentiment,
+            },
+            news: {
+                total: newsCount,
+                positive: positiveSentiment,
+                negative: negativeSentiment,
+            },
+            timestamp: marketData.timestamp,
         });
     } catch (error) {
-        console.error('Dashboard error:', error);
-        res.status(500).json({ error: 'Failed to fetch dashboard data' });
+        console.error('Dashboard data error:', error);
+        return res.status(500).json({ error: 'Failed to fetch dashboard data' });
     }
 };
 
 /**
- * Get heatmap data for visualization
+ * Get market heatmap data with real-time rates
  */
-export const getHeatmapData = async (req: Request, res: Response) => {
+export const getHeatmapData = async (_req: Request, res: Response) => {
     try {
-        const baseCurrency = (req.query.base as string) || 'USD';
-
-        const currencies = await prisma.currency.findMany({
-            where: {
-                symbol: {
-                    not: baseCurrency,
-                },
-            },
-            take: 20,
-        });
+        const baseCurrencies = ['USD', 'EUR', 'GBP'];
+        const targetCurrencies = ['EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'];
 
         const heatmapData: any[] = [];
 
-        for (const currency of currencies) {
-            const currencyPair = `${baseCurrency}/${currency.symbol}`;
-            try {
-                const change24h = await calculate24hChange(currencyPair);
-                const rate = await getRealTimeRate(baseCurrency, currency.symbol);
+        for (const base of baseCurrencies) {
+            for (const target of targetCurrencies) {
+                if (base === target) continue;
 
-                heatmapData.push({
-                    currency: currency.symbol,
-                    name: currency.name,
-                    change: change24h,
-                    rate,
-                    // Color intensity based on change magnitude
-                    intensity: Math.min(100, Math.abs(change24h) * 10),
-                    color: change24h > 0 ? 'green' : change24h < 0 ? 'red' : 'gray',
-                });
-            } catch (error) {
-                console.error(`Failed to fetch heatmap data for ${currency.symbol}`);
+                try {
+                    const rate = await getRealTimeRate(base, target);
+                    heatmapData.push({
+                        from: base,
+                        to: target,
+                        rate,
+                    });
+                } catch (error) {
+                    console.error(`Failed to fetch ${base}/${target}`);
+                }
             }
         }
 
-        res.json({
-            baseCurrency,
+        return res.json({
             data: heatmapData,
             lastUpdated: new Date(),
         });
     } catch (error) {
         console.error('Heatmap error:', error);
-        res.status(500).json({ error: 'Failed to fetch heatmap data' });
+        return res.status(500).json({ error: 'Failed to fetch heatmap data' });
     }
 };
 
 /**
- * Get market statistics
+ * Get market statistics endpoint
  */
-export const getMarketStats = async (_req: Request, res: Response) => {
+export const getMarketStatsEndpoint = async (_req: Request, res: Response) => {
     try {
-        // Get total exchange rates recorded
-        const totalRates = await prisma.exchangeRate.count();
+        const stats = await getMarketStats();
 
-        // Get total historical data points
-        const totalHistoricalData = await prisma.historicalData.count();
-
-        // Get latest news count
-        const newsCount = await prisma.news.count({
-            where: {
-                publishedAt: {
-                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
-                },
-            },
-        });
-
-        // Get active predictions
-        const predictionsCount = await prisma.prediction.count({
-            where: {
-                createdAt: {
-                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-                },
-            },
-        });
-
-        res.json({
-            totalRates,
-            totalHistoricalData,
-            newsLast24h: newsCount,
-            predictionsLast24h: predictionsCount,
-        });
+        return res.json(stats);
     } catch (error) {
         console.error('Market stats error:', error);
-        res.status(500).json({ error: 'Failed to fetch market statistics' });
+        return res.status(500).json({ error: 'Failed to fetch market statistics' });
     }
 };

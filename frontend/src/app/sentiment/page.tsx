@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Card from '../../components/Card';
 import { Newspaper, TrendingUp, TrendingDown, ThumbsUp, ThumbsDown, Minus, Calendar } from 'lucide-react';
@@ -20,101 +19,35 @@ interface NewsItem {
 }
 
 export default function SentimentPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
     const [news, setNews] = useState<NewsItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-        }
-    }, [isAuthenticated, authLoading, router]);
-
-    useEffect(() => {
-        if (isAuthenticated) {
-            fetchSentiment();
-        }
-    }, [isAuthenticated]);
+        fetchSentiment();
+    }, []);
 
     const fetchSentiment = async () => {
         setLoading(true);
-        // Simulate API call - replace with actual API
-        setTimeout(() => {
-            setNews([
-                {
-                    id: '1',
-                    title: 'Federal Reserve Signals Potential Rate Cut in Q2 2024',
-                    source: 'Reuters',
-                    publishedAt: '2024-12-04T14:30:00Z',
-                    sentiment: 'positive',
-                    score: 0.82,
-                    impact: ['USD', 'EUR/USD', 'GBP/USD'],
-                    summary: 'The Fed indicates flexibility on interest rates amid economic data...',
-                },
-                {
-                    id: '2',
-                    title: 'European Central Bank Maintains Hawkish Stance',
-                    source: 'Bloomberg',
-                    publishedAt: '2024-12-04T12:15:00Z',
-                    sentiment: 'negative',
-                    score: -0.65,
-                    impact: ['EUR', 'EUR/USD'],
-                    summary: 'ECB signals continued tight monetary policy to combat inflation...',
-                },
-                {
-                    id: '3',
-                    title: 'UK GDP Growth Exceeds Expectations',
-                    source: 'Financial Times',
-                    publishedAt: '2024-12-04T10:00:00Z',
-                    sentiment: 'positive',
-                    score: 0.73,
-                    impact: ['GBP', 'GBP/USD'],
-                    summary: 'British economy shows resilience with 0.3% growth in Q4...',
-                },
-                {
-                    id: '4',
-                    title: 'Japanese Yen Remains Stable Amid Mixed Economic Signals',
-                    source: 'Nikkei',
-                    publishedAt: '2024-12-04T08:45:00Z',
-                    sentiment: 'neutral',
-                    score: 0.05,
-                    impact: ['JPY', 'USD/JPY'],
-                    summary: 'Currency markets show cautious optimism ahead of BOJ meeting...',
-                },
-                {
-                    id: '5',
-                    title: 'Australian Dollar Surges on Strong Employment Data',
-                    source: 'ABC News',
-                    publishedAt: '2024-12-04T06:30:00Z',
-                    sentiment: 'positive',
-                    score: 0.89,
-                    impact: ['AUD', 'AUD/USD'],
-                    summary: 'Employment figures beat forecasts, strengthening AUD position...',
-                },
-                {
-                    id: '6',
-                    title: 'Global Trade Tensions Rise, Affecting Currency Markets',
-                    source: 'Wall Street Journal',
-                    publishedAt: '2024-12-03T18:20:00Z',
-                    sentiment: 'negative',
-                    score: -0.71,
-                    impact: ['USD', 'EUR', 'CNY'],
-                    summary: 'Escalating trade disputes create uncertainty in forex markets...',
-                },
-            ]);
-            setLoading(false);
-        }, 800);
-    };
+        try {
+            const response = await fetch(`/api/sentiment?limit=20`, {
+                credentials: 'include',
+            });
 
-    if (authLoading || !isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <LoadingSpinner size="lg" />
-            </div>
-        );
-    }
+            if (!response.ok) {
+                throw new Error('Failed to fetch sentiment data');
+            }
+
+            const data = await response.json();
+            setNews(data.news || []);
+        } catch (error) {
+            console.error('Error fetching sentiment:', error);
+            // Fallback to empty array on error
+            setNews([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filteredNews = filter === 'all' ? news : news.filter((item) => item.sentiment === filter);
 
@@ -128,7 +61,7 @@ export default function SentimentPage() {
         news.reduce((sum, item) => sum + item.score, 0) / news.length;
 
     return (
-        <>
+        <ProtectedRoute>
             <Navbar />
             <div className="min-h-screen pt-20 pb-12">
                 <div className="container mx-auto px-4">
@@ -207,14 +140,14 @@ export default function SentimentPage() {
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
-                                    className={`px-4 py-2 rounded-lg font-medium transition-all capitalize ${filter === f
-                                            ? 'bg-primary-500 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all capitalize currency-cursor ${filter === f
+                                        ? 'bg-primary-500 text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         }`}
                                 >
                                     {f}
                                 </button>
-                            ))}
+                            ))}}
                         </div>
                     </Card>
 
@@ -235,10 +168,10 @@ export default function SentimentPage() {
                                     <div className="flex items-start gap-4">
                                         {/* Sentiment Icon */}
                                         <div className={`w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 ${item.sentiment === 'positive'
-                                                ? 'bg-success-light/30'
-                                                : item.sentiment === 'negative'
-                                                    ? 'bg-danger-light/30'
-                                                    : 'bg-neutral-light/30'
+                                            ? 'bg-success-light/30'
+                                            : item.sentiment === 'negative'
+                                                ? 'bg-danger-light/30'
+                                                : 'bg-neutral-light/30'
                                             }`}>
                                             {item.sentiment === 'positive' ? (
                                                 <ThumbsUp className="w-8 h-8 text-success" />
@@ -283,7 +216,7 @@ export default function SentimentPage() {
                     )}
                 </div>
             </div>
-        </>
+        </ProtectedRoute>
     );
 }
 

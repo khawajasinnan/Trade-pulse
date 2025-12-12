@@ -1,46 +1,47 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import { dashboardAPI } from '../../services/api.service';
 import Navbar from '../../components/Navbar';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import { TrendingUp, TrendingDown, RefreshCw, AlertCircle, FileDown } from 'lucide-react';
 
 interface LiveRate {
-    currencyPair: string;
-    targetCurrency: string;
+    pair: string;
+    currency: string;
     name: string;
-    rate: number;
-    change24h: number;
-    trend: 'up' | 'down' | 'neutral';
+    currentRate: number;
+    change: number;
+    previousRate: number;
+    currencyPair?: string;
+    trend?: 'up' | 'down' | 'neutral';
 }
 
 interface DashboardData {
-    liveRates: LiveRate[];
-    topGainers: any[];
-    topLosers: any[];
-    marketSummary: {
+    currencyPairs: any[];
+    gainers: any[];
+    losers: any[];
+    stats: {
         totalPairs: number;
         positiveMovers: number;
         negativeMovers: number;
-        marketSentiment: string;
+        sentiment: string;
     };
+    news?: {
+        total: number;
+        positive: number;
+        negative: number;
+    };
+    timestamp: string;
 }
 
 export default function DashboardPage() {
-    const { isAuthenticated, loading: authLoading, user } = useAuth();
-    const router = useRouter();
+    const { user } = useAuth();
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-        }
-    }, [isAuthenticated, authLoading, router]);
 
     const fetchDashboardData = async () => {
         try {
@@ -57,40 +58,130 @@ export default function DashboardPage() {
     };
 
     useEffect(() => {
-        if (isAuthenticated) {
-            fetchDashboardData();
+        fetchDashboardData();
 
-            // Auto-refresh every 30 seconds
-            const interval = setInterval(fetchDashboardData, 30000);
-            return () => clearInterval(interval);
+        // Auto-refresh every 30 seconds
+        const interval = setInterval(fetchDashboardData, 30000);
+
+        // Server-Sent Events for live rates
+        let es: EventSource | null = null;
+        try {
+            es = new EventSource('/api/events');
+
+            es.addEventListener('rates', (ev: MessageEvent) => {
+                try {
+                    const payload = JSON.parse(ev.data);
+                    const rates = payload.rates || {};
+
+                    setData((prev) => {
+                        if (!prev) return prev;
+
+                        const updatedPairs = prev.currencyPairs.map((cp: any) => {
+                            const pairKey = cp.pair || cp.currencyPair || '';
+                            const altKey = pairKey.replace('/', '-');
+
+                            const rate = rates[pairKey] ?? rates[altKey] ?? cp.currentRate;
+                            const previousRate = cp.currentRate || rate;
+                            const change = previousRate ? ((rate - previousRate) / previousRate) * 100 : 0;
+                            const trend = rate > previousRate ? 'up' : rate < previousRate ? 'down' : 'neutral';
+
+                            return {
+                                ...cp,
+                                previousRate,
+                                currentRate: rate,
+                                change,
+                                trend,
+                            };
+                        });
+
+                        return { ...prev, currencyPairs: updatedPairs, timestamp: payload.timestamp };
+                    });
+                } catch (e) {
+                    console.error('Failed to parse SSE rates message', e);
+                }
+            });
+
+            es.addEventListener('error', (err) => {
+                console.warn('SSE connection error', err);
+            });
+        } catch (e) {
+            console.warn('SSE not available', e);
         }
-    }, [isAuthenticated]);
 
-    const handleExportPDF = () => {
-        alert('PDF export feature coming soon! This will generate a comprehensive market report.');
+        return () => {
+            clearInterval(interval);
+            if (es) es.close();
+        };
+    }, []);
+
+    const handleExportPDF = async () => {
+        try {
+            const response = await fetch('/api/export/pdf', {
+                method: 'GET',
+                credentials: 'include',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate PDF');
+            }
+
+            // Get filename from header or use default
+            const disposition = response.headers.get('Content-Disposition');
+            const filename = disposition
+                ? disposition.split('filename=')[1]?.replace(/"/g, '')
+                : `trade-pulse-report-${Date.now()}.pdf`;
+
+            // Download file
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('PDF export error:', error);
+            alert('Failed to export PDF. Please try again.');
+        }
     };
 
-    const handleExportExcel = () => {
-        alert('Excel export feature coming soon! This will export all market data to Excel format.');
+    const handleExportExcel = async () => {
+        try {
+            const response = await fetch('/api/export/excel', {
+                method: 'GET',
+                credentials: 'include',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate Excel');
+            }
+
+            // Get filename from header or use default
+            const disposition = response.headers.get('Content-Disposition');
+            const filename = disposition
+                ? disposition.split('filename=')[1]?.replace(/"/g, '')
+                : `trade-pulse-${Date.now()}.xlsx`;
+
+            // Download file
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Excel export error:', error);
+            alert('Failed to export Excel. Please try again.');
+        }
     };
-
-    if (authLoading || loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary-500 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading dashboard...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!isAuthenticated) {
-        return null;
-    }
 
     return (
-        <>
+        <ProtectedRoute>
             <Navbar />
             <div className="min-h-screen bg-gray-50 pt-16">
                 {/* Header */}
@@ -102,23 +193,29 @@ export default function DashboardPage() {
                                 <p className="text-sm text-gray-600">Welcome back, {user?.name}</p>
                             </div>
                             <div className="flex items-center gap-3">
-                                <button
-                                    onClick={handleExportPDF}
-                                    className="flex items-center gap-2 bg-danger hover:bg-danger-dark text-white px-4 py-2 rounded-lg transition text-sm"
-                                >
-                                    <FileDown className="w-4 h-4" />
-                                    Export PDF
-                                </button>
-                                <button
-                                    onClick={handleExportExcel}
-                                    className="flex items-center gap-2 bg-success hover:bg-success-dark text-white px-4 py-2 rounded-lg transition text-sm"
-                                >
-                                    <FileDown className="w-4 h-4" />
-                                    Export Excel
-                                </button>
+                                {/* Export buttons - Only for Traders */}
+                                {user?.role === 'Trader' && (
+                                    <>
+                                        <button
+                                            onClick={handleExportPDF}
+                                            className="flex items-center gap-2 bg-danger hover:bg-danger-dark text-white px-4 py-2 rounded-lg transition text-sm currency-cursor"
+                                        >
+                                            <FileDown className="w-4 h-4" />
+                                            Export PDF
+                                        </button>
+                                        <button
+                                            onClick={handleExportExcel}
+                                            className="flex items-center gap-2 bg-success hover:bg-success-dark text-white px-4 py-2 rounded-lg transition text-sm currency-cursor"
+                                        >
+                                            <FileDown className="w-4 h-4" />
+                                            Export Excel
+                                        </button>
+                                    </>
+                                )}
+                                {/* Refresh button - Available to all users */}
                                 <button
                                     onClick={fetchDashboardData}
-                                    className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition"
+                                    className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition currency-cursor"
                                 >
                                     <RefreshCw className="w-4 h-4" />
                                     Refresh
@@ -142,23 +239,23 @@ export default function DashboardPage() {
                             <div className="grid md:grid-cols-4 gap-6 mb-8">
                                 <SummaryCard
                                     title="Total Pairs"
-                                    value={data.marketSummary.totalPairs}
+                                    value={data.stats.totalPairs}
                                     color="blue"
                                 />
                                 <SummaryCard
                                     title="Positive Movers"
-                                    value={data.marketSummary.positiveMovers}
+                                    value={data.stats.positiveMovers}
                                     color="green"
                                 />
                                 <SummaryCard
                                     title="Negative Movers"
-                                    value={data.marketSummary.negativeMovers}
+                                    value={data.stats.negativeMovers}
                                     color="red"
                                 />
                                 <SummaryCard
                                     title="Market Sentiment"
-                                    value={data.marketSummary.marketSentiment}
-                                    color={data.marketSummary.marketSentiment === 'bullish' ? 'green' : 'red'}
+                                    value={data.stats.sentiment}
+                                    color={data.stats.sentiment === 'POSITIVE' ? 'green' : data.stats.sentiment === 'NEGATIVE' ? 'red' : 'blue'}
                                 />
                             </div>
 
@@ -170,7 +267,7 @@ export default function DashboardPage() {
                                         Top Gainers
                                     </h2>
                                     <div className="space-y-3">
-                                        {data.topGainers.slice(0, 5).map((gainer, index) => (
+                                        {data.gainers.slice(0, 5).map((gainer, index) => (
                                             <div key={index} className="flex justify-between items-center p-3 bg-success-light/10 rounded-lg">
                                                 <div>
                                                     <div className="font-semibold text-gray-900">{gainer.currencyPair}</div>
@@ -191,7 +288,7 @@ export default function DashboardPage() {
                                         Top Losers
                                     </h2>
                                     <div className="space-y-3">
-                                        {data.topLosers.slice(0, 5).map((loser, index) => (
+                                        {data.losers.slice(0, 5).map((loser, index) => (
                                             <div key={index} className="flex justify-between items-center p-3 bg-danger-light/10 rounded-lg">
                                                 <div>
                                                     <div className="font-semibold text-gray-900">{loser.currencyPair}</div>
@@ -211,11 +308,11 @@ export default function DashboardPage() {
                             <div className="bg-white rounded-xl shadow-md p-6">
                                 <h2 className="text-xl font-bold text-gray-900 mb-4">Live Currency Rates</h2>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {data.liveRates.map((rate, index) => (
+                                    {data.currencyPairs.map((rate: any, index: number) => (
                                         <div key={index} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold text-gray-900">{rate.currencyPair}</div>
+                                                    <div className="font-bold text-gray-900">{rate.pair || rate.currencyPair || 'N/A'}</div>
                                                     <div className="text-sm text-gray-600">{rate.name}</div>
                                                 </div>
                                                 {rate.trend === 'up' ? (
@@ -224,9 +321,9 @@ export default function DashboardPage() {
                                                     <TrendingDown className="w-5 h-5 text-danger" />
                                                 ) : null}
                                             </div>
-                                            <div className="text-2xl font-bold text-gray-900">${rate.rate.toFixed(4)}</div>
-                                            <div className={`text-sm font-semibold ${rate.change24h >= 0 ? 'text-success' : 'text-danger'}`}>
-                                                {rate.change24h >= 0 ? '+' : ''}{rate.change24h.toFixed(2)}% (24h)
+                                            <div className="text-2xl font-bold text-gray-900">${rate.currentRate?.toFixed(4) || 'N/A'}</div>
+                                            <div className={`text-sm font-semibold ${rate.change >= 0 ? 'text-success' : 'text-danger'}`}>
+                                                {rate.change >= 0 ? '+' : ''}{rate.change?.toFixed(2) || '0.00'}% (24h)
                                             </div>
                                         </div>
                                     ))}
@@ -241,7 +338,7 @@ export default function DashboardPage() {
                     )}
                 </div>
             </div>
-        </>
+        </ProtectedRoute>
     );
 }
 

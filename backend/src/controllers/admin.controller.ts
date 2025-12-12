@@ -165,21 +165,8 @@ export const getFailedLogins = async (req: AuthRequest, res: Response) => {
  */
 export const getSystemStats = async (_req: AuthRequest, res: Response) => {
     try {
-        const [
-            totalUsers,
-            totalBasicUsers,
-            totalTraders,
-            totalAdmins,
-            bannedUsers,
-            totalLoginAttempts,
-            failedLoginAttempts,
-            totalExchangeRates,
-            totalHistoricalData,
-            totalNews,
-            totalPredictions,
-            totalPortfolios,
-            totalAlerts,
-        ] = await Promise.all([
+        // Use Promise.allSettled to handle partial failures gracefully
+        const results = await Promise.allSettled([
             prisma.user.count(),
             prisma.user.count({ where: { role: 'BasicUser' } }),
             prisma.user.count({ where: { role: 'Trader' } }),
@@ -195,25 +182,42 @@ export const getSystemStats = async (_req: AuthRequest, res: Response) => {
             prisma.alert.count(),
         ]);
 
-        res.json({
+        // Extract values or use 0 as fallback
+        const [
+            totalUsers,
+            basicUsers,
+            traders,
+            admins,
+            bannedUsers,
+            totalLoginAttempts,
+            failedLoginAttempts,
+            totalExchangeRates,
+            totalHistoricalData,
+            totalNews,
+            totalPredictions,
+            totalPortfolios,
+            totalAlerts,
+        ] = results.map((result: PromiseSettledResult<number>) =>
+            result.status === 'fulfilled' ? result.value : 0
+        );
+
+        return res.json({
             users: {
                 total: totalUsers,
-                basicUsers: totalBasicUsers,
-                traders: totalTraders,
-                admins: totalAdmins,
+                basic: basicUsers,
+                traders: traders,
+                admins: admins,
                 banned: bannedUsers,
+                active: totalUsers - bannedUsers,
             },
-            security: {
+            activity: {
                 totalLoginAttempts,
                 failedLoginAttempts,
-                successRate:
-                    totalLoginAttempts > 0
-                        ? ((totalLoginAttempts - failedLoginAttempts) / totalLoginAttempts) * 100
-                        : 0,
+                successfulLogins: totalLoginAttempts - failedLoginAttempts,
             },
             data: {
                 exchangeRates: totalExchangeRates,
-                historicalData: totalHistoricalData,
+                historicalDataPoints: totalHistoricalData,
                 news: totalNews,
                 predictions: totalPredictions,
             },
@@ -224,7 +228,7 @@ export const getSystemStats = async (_req: AuthRequest, res: Response) => {
         });
     } catch (error) {
         console.error('Get system stats error:', error);
-        res.status(500).json({ error: 'Failed to fetch system statistics' });
+        return res.status(500).json({ error: 'Failed to fetch system stats' });
     }
 };
 

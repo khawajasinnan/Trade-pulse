@@ -14,7 +14,10 @@ import {
     User,
     LogOut,
     Menu,
-    X
+    X,
+    Shield,
+    Brain,
+    ArrowLeftRight,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -36,7 +39,7 @@ export default function Navbar() {
 
     const handleLogout = async () => {
         await logout();
-        router.push('/login');
+        router.push('/');
     };
 
     if (!isAuthenticated) {
@@ -44,18 +47,60 @@ export default function Navbar() {
     }
 
     const navLinks = [
-        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { href: '/predictions', label: 'Predictions', icon: TrendingUp },
-        { href: '/sentiment', label: 'Sentiment', icon: Newspaper },
-        { href: '/portfolio', label: 'Portfolio', icon: Wallet },
-        { href: '/charts', label: 'Charts', icon: BarChart3 },
+        {
+            href: '/dashboard',
+            label: 'Dashboard',
+            icon: LayoutDashboard,
+            roles: ['BasicUser', 'Trader', 'Admin'] // Everyone can see dashboard
+        },
+        {
+            href: '/converter',
+            label: 'Converter',
+            icon: ArrowLeftRight,
+            roles: ['BasicUser'] // Only BasicUser can convert currency
+        },
+        {
+            href: '/predictions',
+            label: 'Predictions',
+            icon: Brain,
+            roles: ['Trader'] // Only Trader
+        },
+        {
+            href: '/portfolio',
+            label: 'Portfolio',
+            icon: Wallet,
+            roles: ['Trader'] // Only Trader
+        },
+        {
+            href: '/sentiment',
+            label: 'Sentiment',
+            icon: TrendingUp,
+            roles: ['Trader'] // Only Trader
+        },
+        {
+            href: '/charts',
+            label: 'Charts',
+            icon: BarChart3,
+            roles: ['Trader'] // Only Trader
+        },
+        {
+            href: '/admin',
+            label: 'Admin',
+            icon: Shield,
+            roles: ['Admin'] // Only Admin
+        },
     ];
+
+    // Filter navigation based on user role
+    const filteredLinks = navLinks.filter(link =>
+        user?.role && link.roles.includes(user.role)
+    );
 
     return (
         <nav
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
-                    ? 'bg-white/90 backdrop-blur-lg shadow-md'
-                    : 'bg-white/70 backdrop-blur-sm'
+                ? 'bg-white/90 backdrop-blur-lg shadow-md'
+                : 'bg-white/70 backdrop-blur-sm'
                 }`}
         >
             <div className="container mx-auto px-4">
@@ -72,7 +117,7 @@ export default function Navbar() {
 
                     {/* Desktop Navigation */}
                     <div className="hidden md:flex items-center gap-1">
-                        {navLinks.map((link) => {
+                        {filteredLinks.map((link) => {
                             const Icon = link.icon;
                             const isActive = pathname === link.href;
 
@@ -80,9 +125,9 @@ export default function Navbar() {
                                 <Link
                                     key={link.href}
                                     href={link.href}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${isActive
-                                            ? 'bg-primary-500 text-white shadow-md'
-                                            : 'text-gray-700 hover:bg-gray-100'
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 currency-cursor ${isActive
+                                        ? 'bg-primary-500 text-white shadow-md'
+                                        : 'text-gray-700 hover:bg-gray-100'
                                         }`}
                                 >
                                     <Icon className="w-4 h-4" />
@@ -90,6 +135,15 @@ export default function Navbar() {
                                 </Link>
                             );
                         })}
+
+                        {/* Direct Logout Button */}
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200 ml-2 currency-cursor"
+                        >
+                            <LogOut className="w-4 h-4" />
+                            <span className="font-medium text-sm">Logout</span>
+                        </button>
                     </div>
 
                     {/* User Menu */}
@@ -98,14 +152,21 @@ export default function Navbar() {
                         <div className="relative hidden md:block">
                             <button
                                 onClick={() => setShowUserMenu(!showUserMenu)}
-                                className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                                className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors currency-cursor"
                             >
                                 <div className="w-8 h-8 bg-gradient-emerald rounded-full flex items-center justify-center">
                                     <User className="w-5 h-5 text-white" />
                                 </div>
                                 <div className="text-left hidden lg:block">
                                     <div className="text-sm font-semibold text-gray-900">{user?.name}</div>
-                                    <div className="text-xs text-gray-500">{user?.role}</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${user?.role === 'Admin' ? 'bg-purple-100 text-purple-800' :
+                                            user?.role === 'Trader' ? 'bg-blue-100 text-blue-800' :
+                                                'bg-gray-100 text-gray-700'
+                                            }`}>
+                                            {user?.role}
+                                        </span>
+                                    </div>
                                 </div>
                             </button>
 
@@ -156,7 +217,7 @@ export default function Navbar() {
                 {isMobileMenuOpen && (
                     <div className="md:hidden py-4 animate-fade-in-down">
                         <div className="flex flex-col gap-2">
-                            {navLinks.map((link) => {
+                            {filteredLinks.map((link) => {
                                 const Icon = link.icon;
                                 const isActive = pathname === link.href;
 
@@ -166,8 +227,8 @@ export default function Navbar() {
                                         href={link.href}
                                         onClick={() => setIsMobileMenuOpen(false)}
                                         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
-                                                ? 'bg-primary-500 text-white shadow-md'
-                                                : 'text-gray-700 hover:bg-gray-100'
+                                            ? 'bg-primary-500 text-white shadow-md'
+                                            : 'text-gray-700 hover:bg-gray-100'
                                             }`}
                                     >
                                         <Icon className="w-5 h-5" />

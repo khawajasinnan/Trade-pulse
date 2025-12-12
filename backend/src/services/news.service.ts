@@ -52,8 +52,8 @@ export const fetchFinancialNews = async (
         const processedArticles: any[] = [];
 
         for (const article of articles) {
-            // Analyze sentiment
-            const sentimentResult = analyzeSentiment(
+            // Analyze sentiment (async)
+            const sentimentResult = await analyzeSentiment(
                 `${article.title} ${article.description || ''}`
             );
 

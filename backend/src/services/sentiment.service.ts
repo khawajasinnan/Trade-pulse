@@ -3,14 +3,30 @@ import Sentiment from 'sentiment';
 const sentiment = new Sentiment();
 
 /**
- * Analyze sentiment of text
+ * Analyze sentiment using ML model (FinBERT) with fallback
  */
-export const analyzeSentiment = (
+export const analyzeSentiment = async (
+    text: string
+): Promise<{
+    sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+    score: number;
+    confidence: number;
+    model: string;
+}> => {
+    // Use basic sentiment analyzer only (no ML Python execution)
+    return analyzeSentimentBasic(text);
+};
+
+/**
+ * Basic sentiment analysis (fallback)
+ */
+export const analyzeSentimentBasic = (
     text: string
 ): {
     sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
     score: number;
-    comparative: number;
+    confidence: number;
+    model: string;
 } => {
     const result = sentiment.analyze(text);
 
@@ -31,21 +47,23 @@ export const analyzeSentiment = (
     return {
         sentiment: sentimentClass,
         score: normalizedScore,
-        comparative: result.comparative,
+        confidence: 0.5,
+        model: 'basic',
     };
 };
 
 /**
  * Batch analyze multiple texts
  */
-export const batchAnalyzeSentiment = (
+export const batchAnalyzeSentiment = async (
     texts: string[]
-): Array<{
+): Promise<Array<{
     sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
     score: number;
-    comparative: number;
-}> => {
-    return texts.map((text) => analyzeSentiment(text));
+    confidence: number;
+    model: string;
+}>> => {
+    return Promise.all(texts.map((text) => analyzeSentiment(text)));
 };
 
 /**

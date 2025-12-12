@@ -2,25 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
-import LoadingSpinner from '../../components/LoadingSpinner';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import Card from '../../components/Card';
 import { User, Mail, Shield, Key, Bell, Save } from 'lucide-react';
 
 export default function ProfilePage() {
-    const { user, isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { user } = useAuth();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [notifications, setNotifications] = useState(true);
     const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-        }
-    }, [isAuthenticated, authLoading, router]);
 
     useEffect(() => {
         if (user) {
@@ -38,16 +30,8 @@ export default function ProfilePage() {
         }, 1000);
     };
 
-    if (authLoading || !isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <LoadingSpinner size="lg" />
-            </div>
-        );
-    }
-
     return (
-        <>
+        <ProtectedRoute>
             <Navbar />
             <div className="min-h-screen pt-20 pb-12">
                 <div className="container mx-auto px-4 max-w-4xl">
@@ -172,7 +156,7 @@ export default function ProfilePage() {
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            className="btn-primary w-full py-4 text-lg flex items-center justify-center gap-2"
+                            className="btn-primary w-full py-4 text-lg flex items-center justify-center gap-2 currency-cursor"
                         >
                             {saving ? (
                                 <>
@@ -189,6 +173,6 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
-        </>
+        </ProtectedRoute>
     );
 }

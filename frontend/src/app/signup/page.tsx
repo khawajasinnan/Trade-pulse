@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,23 +8,28 @@ import { UserPlus, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-rea
 
 export default function SignupPage() {
     const router = useRouter();
-    const { signup } = useAuth();
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        role: 'BasicUser',
-    });
+    const { signup, isAuthenticated, loading: authLoading } = useAuth();
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState(''); // Keep confirmPassword separate
+    const [role, setRole] = useState<'BasicUser' | 'Trader' | 'Admin'>('BasicUser');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Redirect if already authenticated
+    useEffect(() => {
+        if (!authLoading && isAuthenticated) {
+            router.push('/dashboard');
+        }
+    }, [isAuthenticated, authLoading, router]);
+
     const passwordRequirements = [
-        { label: 'At least 8 characters', met: formData.password.length >= 8 },
-        { label: 'Contains uppercase letter', met: /[A-Z]/.test(formData.password) },
-        { label: 'Contains lowercase letter', met: /[a-z]/.test(formData.password) },
-        { label: 'Contains number', met: /\d/.test(formData.password) },
-        { label: 'Contains special character', met: /[@$!%*?&]/.test(formData.password) },
+        { label: 'At least 8 characters', met: password.length >= 8 },
+        { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
+        { label: 'Contains lowercase letter', met: /[a-z]/.test(password) },
+        { label: 'Contains number', met: /\d/.test(password) },
+        { label: 'Contains special character', met: /[@$!%*&]/.test(password) },
     ];
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +37,7 @@ export default function SignupPage() {
         setError('');
 
         // Validate passwords match
-        if (formData.password !== formData.confirmPassword) {
+        if (password !== confirmPassword) {
             setError('Passwords do not match');
             return;
         }
@@ -46,7 +51,7 @@ export default function SignupPage() {
         setLoading(true);
 
         try {
-            await signup(formData.name, formData.email, formData.password, formData.role);
+            await signup(name, email, password, role);
             router.push('/dashboard');
         } catch (err: any) {
             setError(err.message || 'Signup failed');
@@ -89,8 +94,8 @@ export default function SignupPage() {
                                 <input
                                     id="name"
                                     type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
                                     required
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
                                     placeholder="John Doe"
@@ -108,8 +113,8 @@ export default function SignupPage() {
                                 <input
                                     id="email"
                                     type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     required
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
                                     placeholder="you@example.com"
@@ -124,13 +129,16 @@ export default function SignupPage() {
                             </label>
                             <select
                                 id="role"
-                                value={formData.role}
-                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                value={role}
+                                onChange={(e) => setRole(e.target.value as 'BasicUser' | 'Trader')}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
                             >
-                                <option value="BasicUser">Basic User - Standard features</option>
+                                <option value="BasicUser">Basic User - Essential tools</option>
                                 <option value="Trader">Trader - Advanced analytics</option>
                             </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                                You can upgrade your account type later
+                            </p>
                         </div>
 
                         {/* Password */}
@@ -143,8 +151,8 @@ export default function SignupPage() {
                                 <input
                                     id="password"
                                     type="password"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     required
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
                                     placeholder="••••••••"
@@ -152,7 +160,7 @@ export default function SignupPage() {
                             </div>
 
                             {/* Password Requirements */}
-                            {formData.password && (
+                            {password && (
                                 <div className="mt-2 space-y-1">
                                     {passwordRequirements.map((req, index) => (
                                         <div key={index} className="flex items-center gap-2 text-xs">
@@ -183,8 +191,8 @@ export default function SignupPage() {
                                 <input
                                     id="confirmPassword"
                                     type="password"
-                                    value={formData.confirmPassword}
-                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
                                     placeholder="••••••••"
@@ -196,7 +204,7 @@ export default function SignupPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                            className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl currency-cursor"
                         >
                             {loading ? 'Creating account...' : 'Create Account'}
                         </button>

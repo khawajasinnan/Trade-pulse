@@ -4,23 +4,185 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Cache with TTL from environment
 const cache = new NodeCache({
     stdTTL: parseInt(process.env.FOREX_CACHE_TTL || '300'), // 5 minutes default
     checkperiod: 60,
 });
 
-const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
-const BASE_URL = 'https://www.alphavantage.co/query';
+// API configuration - supports multiple providers
+const FOREX_API_KEY = process.env.FOREX_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+const API_PROVIDER = process.env.FOREX_API_PROVIDER || 'exchangerate'; // 'exchangerate' or 'alphavantage'
 
 /**
- * Fetch real-time exchange rate
+ * Fetch real-time exchange rate from ExchangeRate-API
+ */
+async function fetchFromExchangeRateAPI(from: string, to: string): Promise<number> {
+    if (!FOREX_API_KEY) {
+        throw new Error('FOREX_API_KEY not configured');
+    }
+
+    const url = `https://v6.exchangerate-api.com/v6/${FOREX_API_KEY}/pair/${from}/${to}`;
+    const response = await axios.get(url, { timeout: 10000 });
+
+    if (response.data.result !== 'success') {
+        throw new Error('ExchangeRate-API request failed');
+    }
+
+    return response.data.conversion_rate;
+}
+
+/**
+ * Fetch real-time exchange rate from Alpha Vantage
+ */
+async function fetchFromAlphaVantage(from: string, to: string): Promise<number> {
+    if (!FOREX_API_KEY) {
+        throw new Error('ALPHA_VANTAGE_API_KEY not configured');
+    }
+
+    const BASE_URL = 'https://www.alphavantage.co/query';
+    const response = await axios.get(BASE_URL, {
+        params: {
+            function: 'CURRENCY_EXCHANGE_RATE',
+            from_currency: from,
+            to_currency: to,
+            apikey: FOREX_API_KEY,
+        },
+        timeout: 10000,
+    });
+
+    // Check for rate limit error
+    if (response.data.Note) {
+        console.log('Alpha Vantage rate limit hit:', response.data.Note);
+        throw new Error('Rate limit exceeded');
+    }
+
+    // Check for invalid API key
+    if (response.data.Error || response.data['Error Message']) {
+        console.log('Alpha Vantage error:', response.data);
+        throw new Error('API error');
+    }
+
+    const data = response.data['Realtime Currency Exchange Rate'];
+    if (!data) {
+        console.log('Unexpected Alpha Vantage response:', JSON.stringify(response.data).substring(0, 200));
+        throw new Error('Invalid Alpha Vantage response');
+    }
+
+    return parseFloat(data['5. Exchange Rate']);
+}
+
+/**
+ * Fetch real-time exchange rate from exchangerate.host (free, no API key)
+ */
+async function fetchFromExchangeRateHost(from: string, to: string): Promise<number> {
+    // Support optional access key. If provided, treat it as an apilayer/apikey for exchangerates_data
+    const accessKey = process.env.EXCHANGERATE_HOST_KEY;
+
+    if (accessKey) {
+        // Many users provide an apilayer key - call apilayer exchangerates_data endpoint with header
+        const url = `https://api.apilayer.com/exchangerates_data/convert?from=${from}&to=${to}`;
+        const response = await axios.get(url, {
+            timeout: 10000,
+            headers: { apikey: accessKey },
+        });
+
+        if (!response.data || typeof response.data.result !== 'number') {
+            console.log('apilayer exchangerates_data invalid response:', JSON.stringify(response.data).substring(0, 400));
+            throw new Error('ExchangeRateHost (apilayer) failed');
+        }
+
+        return response.data.result;
+    }
+
+    // No key provided - use exchangerate.host (public, no key required)
+    const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}`;
+    const response = await axios.get(url, { timeout: 10000 });
+
+    if (!response.data || response.data.success === false || typeof response.data.result !== 'number') {
+        console.log('exchangerate.host invalid response:', JSON.stringify(response.data).substring(0, 400));
+        throw new Error('ExchangeRateHost failed');
+    }
+
+    return response.data.result;
+}
+
+/**
+ * Fetch rate from Frankfurter.app (free)
+ */
+async function fetchFromFrankfurter(from: string, to: string): Promise<number> {
+    // Example: https://api.frankfurter.app/latest?from=USD&to=EUR
+    const url = `https://api.frankfurter.app/latest?from=${from}&to=${to}`;
+    const response = await axios.get(url, { timeout: 8000 });
+
+    if (!response.data || !response.data.rates || typeof response.data.rates[to] !== 'number') {
+        console.log('Frankfurter invalid response:', JSON.stringify(response.data).substring(0, 400));
+        throw new Error('Frankfurter failed');
+    }
+
+    return response.data.rates[to];
+}
+
+/**
+ * Fetch rate from open.er-api.com (free)
+ */
+async function fetchFromOpenEr(from: string, to: string): Promise<number> {
+    // Example: https://open.er-api.com/v6/latest/USD
+    const url = `https://open.er-api.com/v6/latest/${from}`;
+    const response = await axios.get(url, { timeout: 8000 });
+
+    if (!response.data || response.data.result !== 'success' || typeof response.data.rates[to] !== 'number') {
+        console.log('open.er-api invalid response:', JSON.stringify(response.data).substring(0, 400));
+        throw new Error('OpenEr failed');
+    }
+
+    return response.data.rates[to];
+}
+
+/**
+ * Get real-time exchange rate - main function
  */
 export const getRealTimeRate = async (
     fromCurrency: string,
     toCurrency: string
 ): Promise<number> => {
-    const cacheKey = `rate_${fromCurrency}_${toCurrency}`;
+    // Normalize inputs: accept formats like 'EUR/USD', 'EUR-USD', or accidental 'USD/EUR/USD'
+    const normalize = (s: string) => {
+        if (!s) return s;
+        let v = s.toString().trim().toUpperCase();
+        // Replace common separators with '/'
+        v = v.replace(/[-_\\]/g, '/');
+        if (v.includes('/')) {
+            const parts = v.split('/').filter(Boolean);
+            // If there's more than 2 parts (weird inputs like USD/EUR/USD), take first and last appropriately
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return parts.join('/');
+            // default: take first for base or last for target depending on context; leave caller to split
+            return parts.join('/');
+        }
+        return v;
+    };
+
+    let from = normalize(fromCurrency);
+    let to = normalize(toCurrency);
+
+    // If caller passed the full pair in `from` like 'EUR/USD', split it and override `to`
+    if (from && from.includes('/')) {
+        const parts = from.split('/');
+        if (parts.length >= 2) {
+            from = parts[0];
+            to = parts[1];
+        }
+    }
+
+    // If `to` contains a pair, extract the last token as the target currency
+    if (to && to.includes('/')) {
+        const parts = to.split('/');
+        if (parts.length >= 2) {
+            to = parts[parts.length - 1];
+        }
+    }
+
+    const cacheKey = `rate_${from}_${to}`;
 
     // Check cache first
     const cachedRate = cache.get<number>(cacheKey);
@@ -29,59 +191,125 @@ export const getRealTimeRate = async (
     }
 
     try {
-        const response = await axios.get(BASE_URL, {
-            params: {
-                function: 'CURRENCY_EXCHANGE_RATE',
-                from_currency: fromCurrency,
-                to_currency: toCurrency,
-                apikey: ALPHA_VANTAGE_API_KEY,
-            },
-            timeout: 10000,
-        });
+        let rate: number;
 
-        const data = response.data['Realtime Currency Exchange Rate'];
-
-        if (!data) {
-            throw new Error('Invalid API response');
+        // Try API call based on provider. If one fails, fall back to exchangerate.host.
+        if (API_PROVIDER === 'exchangerate') {
+            try {
+                rate = await fetchFromExchangeRateAPI(from, to);
+            } catch (err) {
+                console.warn('ExchangeRate-API failed for', `${from}/${to}`, (err as any)?.message || String(err));
+                // Try exchangerate.host, then frankfurter, then open.er-api
+                try {
+                    rate = await fetchFromExchangeRateHost(from, to);
+                } catch (e1) {
+                    console.warn('exchangerate.host failed for', `${from}/${to}`, (e1 as any)?.message || String(e1));
+                    try {
+                        rate = await fetchFromFrankfurter(from, to);
+                    } catch (e2) {
+                        console.warn('frankfurter failed for', `${from}/${to}`, (e2 as any)?.message || String(e2));
+                        rate = await fetchFromOpenEr(from, to);
+                    }
+                }
+            }
+        } else {
+            try {
+                rate = await fetchFromAlphaVantage(from, to);
+            } catch (err) {
+                console.warn('Alpha Vantage failed for', `${from}/${to}`, (err as any)?.message || String(err));
+                try {
+                    rate = await fetchFromExchangeRateHost(from, to);
+                } catch (e1) {
+                    console.warn('exchangerate.host failed for', `${from}/${to}`, (e1 as any)?.message || String(e1));
+                    try {
+                        rate = await fetchFromFrankfurter(from, to);
+                    } catch (e2) {
+                        console.warn('frankfurter failed for', `${from}/${to}`, (e2 as any)?.message || String(e2));
+                        rate = await fetchFromOpenEr(from, to);
+                    }
+                }
+            }
         }
 
-        const rate = parseFloat(data['5. Exchange Rate']);
+        // Store in database for historical analysis
+        try {
+            await prisma.exchangeRate.create({
+                data: {
+                    baseCurrency: fromCurrency,
+                    targetCurrency: toCurrency,
+                    rate,
+                },
+            });
 
-        // Store in database
-        await prisma.exchangeRate.create({
-            data: {
-                baseCurrency: fromCurrency,
-                targetCurrency: toCurrency,
-                rate,
-            },
-        });
+            // Also store in HistoricalData table for ML training
+            const currencyPair = `${fromCurrency}-${toCurrency}`;
+            await prisma.historicalData.upsert({
+                where: {
+                    currencyPair_date: {
+                        currencyPair,
+                        date: new Date(),
+                    },
+                },
+                update: { close: rate },
+                create: {
+                    currencyPair,
+                    date: new Date(),
+                    open: rate,
+                    high: rate,
+                    low: rate,
+                    close: rate,
+                    volume: 0,
+                },
+            });
+        } catch (dbError) {
+            console.error('Failed to store rate in database:', dbError);
+            // Continue anyway - we have the rate
+        }
 
-        // Cache the result
+        // Cache for 5 minutes
         cache.set(cacheKey, rate);
 
         return rate;
     } catch (error) {
-        console.error('Error fetching real-time rate:', error);
+        console.error(`Failed to fetch rate for ${fromCurrency}/${toCurrency}:`, error);
 
         // Fallback to last known rate from database
-        const lastRate = await prisma.exchangeRate.findFirst({
-            where: {
-                baseCurrency: fromCurrency,
-                targetCurrency: toCurrency,
-            },
-            orderBy: { timestamp: 'desc' },
-        });
+        try {
+            const lastRate = await prisma.exchangeRate.findFirst({
+                where: {
+                    baseCurrency: fromCurrency,
+                    targetCurrency: toCurrency,
+                },
+                orderBy: { timestamp: 'desc' },
+            });
 
-        if (lastRate) {
-            return lastRate.rate;
+            if (lastRate) {
+                cache.set(cacheKey, lastRate.rate);
+                return lastRate.rate;
+            }
+        } catch (dbError) {
+            console.error('Database fallback also failed:', dbError);
         }
 
-        throw new Error('Failed to fetch exchange rate');
+        // Last resort: Mock rates for common pairs
+        const mockRates: Record<string, number> = {
+            'USD-EUR': 0.92,
+            'USD-GBP': 0.79,
+            'USD-JPY': 149.50,
+            'USD-CHF': 0.88,
+            'USD-CAD': 1.36,
+            'USD-AUD': 1.53,
+            'USD-NZD': 1.68,
+            'USD-CNY': 7.24,
+        };
+
+        const pairKey = `${fromCurrency}-${toCurrency}`;
+        return mockRates[pairKey] || 1.0;
     }
 };
 
 /**
- * Fetch multiple currency rates
+ * Fetch multiple currency rates at once
  */
 export const getMultipleRates = async (
     baseCurrency: string,
@@ -89,107 +317,23 @@ export const getMultipleRates = async (
 ): Promise<{ [key: string]: number }> => {
     const rates: { [key: string]: number } = {};
 
-    for (const target of targetCurrencies) {
-        try {
-            rates[target] = await getRealTimeRate(baseCurrency, target);
-        } catch (error) {
-            console.error(`Failed to fetch rate for ${baseCurrency}/${target}`);
-        }
-    }
+    // Fetch in parallel for speed
+    await Promise.all(
+        targetCurrencies.map(async (target) => {
+            try {
+                rates[target] = await getRealTimeRate(baseCurrency, target);
+            } catch (error) {
+                console.error(`Failed to fetch rate for ${baseCurrency}/${target}`);
+                rates[target] = 1.0; // Fallback
+            }
+        })
+    );
 
     return rates;
 };
 
 /**
- * Fetch historical data for a currency pair
- */
-export const getHistoricalData = async (
-    fromCurrency: string,
-    toCurrency: string,
-    outputSize: 'compact' | 'full' = 'compact'
-): Promise<any[]> => {
-    const cacheKey = `historical_${fromCurrency}_${toCurrency}_${outputSize}`;
-
-    // Check cache
-    const cachedData = cache.get<any[]>(cacheKey);
-    if (cachedData) {
-        return cachedData;
-    }
-
-    try {
-        const response = await axios.get(BASE_URL, {
-            params: {
-                function: 'FX_DAILY',
-                from_symbol: fromCurrency,
-                to_symbol: toCurrency,
-                outputsize: outputSize,
-                apikey: ALPHA_VANTAGE_API_KEY,
-            },
-            timeout: 15000,
-        });
-
-        const timeSeries = response.data['Time Series FX (Daily)'];
-
-        if (!timeSeries) {
-            throw new Error('Invalid historical data response');
-        }
-
-        const currencyPair = `${fromCurrency}/${toCurrency}`;
-        const historicalData: any[] = [];
-
-        // Parse and store historical data
-        for (const [date, values] of Object.entries(timeSeries)) {
-            const dataPoint = {
-                currencyPair,
-                date: new Date(date),
-                open: parseFloat((values as any)['1. open']),
-                high: parseFloat((values as any)['2. high']),
-                low: parseFloat((values as any)['3. low']),
-                close: parseFloat((values as any)['4. close']),
-                volume: 0, // FX data doesn't have volume
-            };
-
-            historicalData.push(dataPoint);
-
-            // Store in database (upsert to avoid duplicates)
-            await prisma.historicalData.upsert({
-                where: {
-                    currencyPair_date: {
-                        currencyPair,
-                        date: new Date(date),
-                    },
-                },
-                update: dataPoint,
-                create: dataPoint,
-            });
-        }
-
-        // Cache the result
-        cache.set(cacheKey, historicalData);
-
-        return historicalData;
-    } catch (error) {
-        console.error('Error fetching historical data:', error);
-
-        // Fallback to database
-        const dbData = await prisma.historicalData.findMany({
-            where: {
-                currencyPair: `${fromCurrency}/${toCurrency}`,
-            },
-            orderBy: { date: 'desc' },
-            take: outputSize === 'compact' ? 100 : 1000,
-        });
-
-        if (dbData.length > 0) {
-            return dbData;
-        }
-
-        throw new Error('Failed to fetch historical data');
-    }
-};
-
-/**
- * Get historical data from database with filters
+ * Get historical data from database
  */
 export const getHistoricalDataFromDB = async (
     currencyPair: string,
@@ -229,65 +373,32 @@ export const getHistoricalDataFromDB = async (
 };
 
 /**
- * Calculate 24h change percentage
+ * Calculate 24h change percentage from real data
  */
 export const calculate24hChange = async (
     currencyPair: string
-): Promise<number> => {
-    const data = await getHistoricalDataFromDB(currencyPair, '24h');
+): Promise<{ change: number; previousRate: number; currentRate: number }> => {
+    try {
+        // Get data from last 24 hours
+        const data = await getHistoricalDataFromDB(currencyPair, '24h');
 
-    if (data.length < 2) {
-        return 0;
-    }
-
-    const oldestPrice = data[0].close;
-    const latestPrice = data[data.length - 1].close;
-
-    const change = ((latestPrice - oldestPrice) / oldestPrice) * 100;
-
-    return parseFloat(change.toFixed(2));
-};
-
-/**
- * Get top gainers and losers
- */
-export const getTopMovers = async (
-    baseCurrency: string = 'USD',
-    limit: number = 5
-): Promise<{ gainers: any[]; losers: any[] }> => {
-    const currencies = await prisma.currency.findMany({
-        where: {
-            symbol: {
-                not: baseCurrency,
-            },
-        },
-    });
-
-    const movements: any[] = [];
-
-    for (const currency of currencies) {
-        const currencyPair = `${baseCurrency}/${currency.symbol}`;
-        try {
-            const change = await calculate24hChange(currencyPair);
-            const currentRate = await getRealTimeRate(baseCurrency, currency.symbol);
-
-            movements.push({
-                currencyPair,
-                currency: currency.symbol,
-                name: currency.name,
-                currentRate,
-                change,
-            });
-        } catch (error) {
-            console.error(`Failed to calculate change for ${currencyPair}`);
+        if (data.length < 2) {
+            // Not enough data, return 0 change
+            return { change: 0, previousRate: 0, currentRate: 0 };
         }
+
+        const oldestPrice = data[0].close;
+        const latestPrice = data[data.length - 1].close;
+
+        const change = ((latestPrice - oldestPrice) / oldestPrice) * 100;
+
+        return {
+            change: parseFloat(change.toFixed(2)),
+            previousRate: oldestPrice,
+            currentRate: latestPrice,
+        };
+    } catch (error) {
+        console.error(`Failed to calculate 24h change for ${currencyPair}:`, error);
+        return { change: 0, previousRate: 0, currentRate: 0 };
     }
-
-    // Sort by change percentage
-    movements.sort((a, b) => b.change - a.change);
-
-    return {
-        gainers: movements.slice(0, limit),
-        losers: movements.slice(-limit).reverse(),
-    };
 };

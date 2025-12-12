@@ -135,7 +135,7 @@
 
   /* Button Variants */
   .btn-primary {
-    @apply bg-primary-500 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-lg;
+    @apply bg-primary-500 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-lg currency-cursor;
     background: linear-gradient(135deg, #05B084 0%, #BADFCD 100%);
     position: relative;
     overflow: hidden;
@@ -166,7 +166,7 @@
   }
 
   .btn-secondary {
-    @apply bg-white/80 backdrop-blur-md hover:bg-white text-gray-900 font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-md border border-gray-200;
+    @apply bg-white/80 backdrop-blur-md hover:bg-white text-gray-900 font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-md border border-gray-200 currency-cursor;
   }
 
   .btn-secondary:hover {
@@ -174,7 +174,7 @@
   }
 
   .btn-accent {
-    @apply bg-accent-500 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-lg;
+    @apply bg-accent-500 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-lg currency-cursor;
     background: linear-gradient(135deg, #015A84 0%, #38bdf8 100%);
   }
 
@@ -183,11 +183,11 @@
   }
 
   .btn-ghost {
-    @apply bg-transparent hover:bg-white/50 backdrop-blur-sm text-gray-700 font-semibold py-3 px-8 rounded-xl transition-all duration-300;
+    @apply bg-transparent hover:bg-white/50 backdrop-blur-sm text-gray-700 font-semibold py-3 px-8 rounded-xl transition-all duration-300 currency-cursor;
   }
 
   .btn-danger {
-    @apply bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-lg;
+    @apply bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-300 shadow-lg currency-cursor;
   }
 
   /* Input Variants */
@@ -527,4 +527,20 @@
     box-shadow: 0 0 30px rgba(5, 176, 132, 0.6),
       0 0 60px rgba(5, 176, 132, 0.4);
   }
+}
+
+/* Scroll Blur Effect - DISABLED */
+
+/* Currency Symbol Cursor */
+.currency-cursor {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><text x="8" y="24" font-size="20" font-weight="bold" fill="%2305B084">$</text></svg>') 12 12, auto;
+}
+
+.currency-cursor-hover:hover {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><text x="8" y="24" font-size="22" font-weight="bold" fill="%23015A84">¥</text></svg>') 12 12, auto;
+}
+
+/* Apply scroll behavior */
+body {
+  scroll-behavior: smooth;
 }

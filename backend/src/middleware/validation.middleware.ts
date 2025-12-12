@@ -41,9 +41,9 @@ export const resetPasswordSchema = z.object({
 
 // Portfolio schemas
 export const addPortfolioSchema = z.object({
-    currency: z.string().min(3).max(3),
-    amount: z.number().positive('Amount must be positive'),
-    purchasePrice: z.number().positive('Purchase price must be positive'),
+    currency: z.string().min(3).max(10), // Allow currency pairs like EUR/USD
+    amount: z.coerce.number().positive('Amount must be positive'), // Coerce string to number
+    purchasePrice: z.coerce.number().positive('Purchase price must be positive'), // Coerce string to number
 });
 
 export const updatePortfolioSchema = z.object({

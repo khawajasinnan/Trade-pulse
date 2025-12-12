@@ -48,6 +48,24 @@ export const createAlert = async (req: AuthRequest, res: Response) => {
 
         const { currencyPair, conditionType, targetValue } = req.body;
 
+        // BasicUser role limitation: max 2 active alerts
+        if (req.user.role === 'BasicUser') {
+            const activeAlertsCount = await prisma.alert.count({
+                where: {
+                    userId: req.user.id,
+                    triggered: false,
+                },
+            });
+
+            if (activeAlertsCount >= 2) {
+                return res.status(403).json({
+                    error: 'BasicUser limited to 2 active alerts',
+                    message: 'Upgrade to Trader for unlimited alerts',
+                    upgradeRequired: true,
+                });
+            }
+        }
+
         const alert = await prisma.alert.create({
             data: {
                 userId: req.user.id,

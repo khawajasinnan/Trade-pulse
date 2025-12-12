@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,11 +8,18 @@ import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
     const router = useRouter();
-    const { login } = useAuth();
+    const { login, isAuthenticated, loading: authLoading } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Redirect if already authenticated
+    useEffect(() => {
+        if (!authLoading && isAuthenticated) {
+            router.push('/dashboard');
+        }
+    }, [isAuthenticated, authLoading, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -115,7 +122,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                            className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl currency-cursor"
                         >
                             {loading ? 'Signing in...' : 'Sign In'}
                         </button>
