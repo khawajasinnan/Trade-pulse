@@ -49,6 +49,11 @@ npm run prisma:migrate
 # Seed database
 npm run prisma:seed
 
+# Optional: Python ML Service Setup (recommended for ML predictions)
+cd ml-service
+./setup-venv.sh .venv
+source .venv/bin/activate
+
 # Start backend
 npm run dev
 ```

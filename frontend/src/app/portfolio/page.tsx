@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import Navbar from '../../components/Navbar';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Card from '../../components/Card';
+import TradeModal from '../../components/TradeModal';
 import { Wallet, TrendingUp, TrendingDown, Plus, ArrowUpRight, ArrowDownRight, DollarSign } from 'lucide-react';
 
 interface Holding {
@@ -31,14 +33,11 @@ interface Transaction {
 
 export default function PortfolioPage() {
     const { user } = useAuth();
+    const { showSuccess, showError } = useToast();
     const [holdings, setHoldings] = useState<Holding[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showBuyModal, setShowBuyModal] = useState(false);
-    const [selectedCurrency, setSelectedCurrency] = useState('EUR/USD');
-    const [liveRate, setLiveRate] = useState<number | null>(null);
-    const [tradeAmount, setTradeAmount] = useState<number>(0);
-    const [fetchingRate, setFetchingRate] = useState(false);
+    const [showTradeModal, setShowTradeModal] = useState(false);
 
     const fetchPortfolio = async () => {
         setLoading(true);
@@ -100,35 +99,11 @@ export default function PortfolioPage() {
         }
     };
 
-    // Fetch live rate when currency changes
-    const fetchLiveRate = async (currency: string) => {
-        setFetchingRate(true);
-        try {
-            const [from, to] = currency.split('/');
-            const response = await fetch(
-                `/api/converter?from=${from}&to=${to}&amount=1`,
-                { credentials: 'include' }
-            );
-            const data = await response.json();
-            setLiveRate(data.convertedAmount || 1);
-        } catch (error) {
-            console.error('Failed to fetch live rate:', error);
-            setLiveRate(1);
-        } finally {
-            setFetchingRate(false);
-        }
-    };
+    // Removed fetchLiveRate - now handled by TradeModal
 
     useEffect(() => {
         fetchPortfolio();
     }, []);
-
-    // Fetch live rate when modal opens
-    useEffect(() => {
-        if (showBuyModal) {
-            fetchLiveRate(selectedCurrency);
-        }
-    }, [showBuyModal]);
 
     const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
     const totalPL = holdings.reduce((sum, h) => sum + h.profitLoss, 0);
@@ -150,20 +125,20 @@ export default function PortfolioPage() {
     return (
         <ProtectedRoute>
             <Navbar />
-            <div className="min-h-screen pt-20 pb-12">
-                <div className="container mx-auto px-4">
+            <div className="min-h-screen pt-20 pb-12 bg-gradient-to-br from-gray-50 to-gray-100">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     {/* Header */}
-                    <div className="mb-8 animate-fade-in-down flex items-center justify-between">
+                    <div className="mb-8 animate-fade-in-down flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                                <Wallet className="w-10 h-10 text-primary-500" />
+                            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                                <Wallet className="w-8 h-8 sm:w-10 sm:h-10 text-primary-500" />
                                 Portfolio
                             </h1>
-                            <p className="text-gray-600">Your virtual currency holdings and transactions</p>
+                            <p className="text-sm sm:text-base text-gray-600">Your virtual currency holdings and transactions</p>
                         </div>
                         <button
-                            onClick={() => setShowBuyModal(true)}
-                            className="btn-primary flex items-center gap-2 currency-cursor"
+                            onClick={() => setShowTradeModal(true)}
+                            className="btn-primary flex items-center gap-2 currency-cursor w-full sm:w-auto justify-center"
                         >
                             <Plus className="w-5 h-5" />
                             New Trade
@@ -171,46 +146,52 @@ export default function PortfolioPage() {
                     </div>
 
                     {/* Portfolio Summary */}
-                    <div className="grid md:grid-cols-3 gap-6 mb-8">
-                        <Card variant="glass" className="animate-fade-in-up" style={{ animationDelay: '0ms' }}>
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                                    <DollarSign className="w-6 h-6 text-primary-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Total Value</p>
-                                    <p className="text-2xl font-bold text-gray-900">${totalValue.toFixed(2)}</p>
-                                </div>
-                            </div>
-                        </Card>
-
-                        <Card variant="glass" className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-                            <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${totalPL >= 0 ? 'bg-success-light/30' : 'bg-danger-light/30'
-                                    }`}>
-                                    {totalPL >= 0 ? (
-                                        <TrendingUp className="w-6 h-6 text-success" />
-                                    ) : (
-                                        <TrendingDown className="w-6 h-6 text-danger" />
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Total P/L</p>
-                                    <p className={`text-2xl font-bold ${totalPL >= 0 ? 'text-success' : 'text-danger'}`}>
-                                        {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(2)}
-                                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+                        <Card variant="glass" className="animate-fade-in-up p-6 sm:p-8" style={{ animationDelay: '0ms' }}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
+                                        <DollarSign className="w-8 h-8 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Total Value</p>
+                                        <p className="text-2xl sm:text-3xl font-bold text-gray-900">${totalValue.toFixed(2)}</p>
+                                    </div>
                                 </div>
                             </div>
                         </Card>
 
-                        <Card variant="glass" className="animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-accent-100 rounded-lg flex items-center justify-center">
-                                    <Wallet className="w-6 h-6 text-accent-600" />
+                        <Card variant="glass" className="animate-fade-in-up p-6 sm:p-8" style={{ animationDelay: '100ms' }}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${totalPL >= 0 ? 'bg-gradient-to-br from-green-400 to-emerald-600' : 'bg-gradient-to-br from-red-400 to-rose-600'
+                                        }`}>
+                                        {totalPL >= 0 ? (
+                                            <TrendingUp className="w-8 h-8 text-white" />
+                                        ) : (
+                                            <TrendingDown className="w-8 h-8 text-white" />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Total P/L</p>
+                                        <p className={`text-2xl sm:text-3xl font-bold ${totalPL >= 0 ? 'text-success' : 'text-danger'}`}>
+                                            {totalPL >= 0 ? '+' : ''}${totalPL.toFixed(2)}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Holdings</p>
-                                    <p className="text-2xl font-bold text-gray-900">{holdings.length}</p>
+                            </div>
+                        </Card>
+
+                        <Card variant="glass" className="animate-fade-in-up p-6 sm:p-8 sm:col-span-2 lg:col-span-1" style={{ animationDelay: '200ms' }}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-lg">
+                                        <Wallet className="w-8 h-8 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs sm:text-sm text-gray-500 mb-1">Holdings</p>
+                                        <p className="text-2xl sm:text-3xl font-bold text-gray-900">{holdings.length}</p>
+                                    </div>
                                 </div>
                             </div>
                         </Card>
@@ -223,8 +204,8 @@ export default function PortfolioPage() {
                         </div>
                     ) : (
                         <>
-                            <h2 className="text-2xl font-bold text-gray-900 mb-4">Holdings</h2>
-                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Holdings</h2>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
                                 {holdings.map((holding, index) => (
                                     <Card
                                         key={holding.currency}
@@ -271,7 +252,7 @@ export default function PortfolioPage() {
                             </div>
 
                             {/* Transaction History */}
-                            <h2 className="text-2xl font-bold text-gray-900 mb-4">Recent Transactions</h2>
+                            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Recent Transactions</h2>
                             <Card variant="glass">
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
@@ -318,173 +299,12 @@ export default function PortfolioPage() {
                     )}
                 </div>
 
-                {/* Buy/Sell Modal */}
-                {showBuyModal && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <Card variant="glass" className="max-w-md w-full">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-2xl font-bold text-gray-900">New Trade</h3>
-                                <button
-                                    onClick={() => setShowBuyModal(false)}
-                                    className="text-gray-500 hover:text-gray-700 transition"
-                                >
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-
-                            <form
-                                onSubmit={async (e) => {
-                                    e.preventDefault();
-                                    const formData = new FormData(e.currentTarget);
-                                    const type = formData.get('type') as 'BUY' | 'SELL';
-
-                                    // Use live rate instead of manual input
-                                    if (!liveRate) {
-                                        alert('Please wait for live rate to load');
-                                        return;
-                                    }
-
-                                    try {
-                                        // Add to backend portfolio
-                                        const response = await fetch('/api/portfolio', {
-                                            method: 'POST',
-                                            credentials: 'include',
-                                            headers: {
-                                                'Content-Type': 'application/json',
-                                            },
-                                            body: JSON.stringify({
-                                                currency: selectedCurrency,
-                                                amount: type === 'BUY' ? tradeAmount : -tradeAmount,
-                                                purchasePrice: liveRate,
-                                            }),
-                                        });
-
-                                        if (!response.ok) {
-                                            const error = await response.json();
-                                            throw new Error(error.error || 'Failed to add trade');
-                                        }
-
-                                        // Add new transaction to list
-                                        const newTransaction: Transaction = {
-                                            id: Date.now().toString(),
-                                            type,
-                                            currency: selectedCurrency,
-                                            amount: tradeAmount,
-                                            price: liveRate,
-                                            total: tradeAmount * liveRate,
-                                            timestamp: new Date().toISOString(),
-                                        };
-
-                                        setTransactions([newTransaction, ...transactions]);
-                                        setShowBuyModal(false);
-
-                                        // Refresh portfolio to get updated totals
-                                        await fetchPortfolio();
-
-                                        alert(`${type} order placed successfully!`);
-                                    } catch (error: any) {
-                                        console.error('Trade error:', error);
-                                        alert(error.message || 'Failed to place trade. Please try again.');
-                                    }
-                                }}
-                                className="space-y-4"
-                            >
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Type
-                                    </label>
-                                    <select
-                                        name="type"
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
-                                    >
-                                        <option value="BUY">BUY</option>
-                                        <option value="SELL">SELL</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Currency Pair
-                                    </label>
-                                    <select
-                                        name="currency"
-                                        value={selectedCurrency}
-                                        onChange={(e) => {
-                                            setSelectedCurrency(e.target.value);
-                                            fetchLiveRate(e.target.value);
-                                        }}
-                                        required
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
-                                    >
-                                        <option value="EUR/USD">EUR/USD</option>
-                                        <option value="GBP/USD">GBP/USD</option>
-                                        <option value="USD/JPY">USD/JPY</option>
-                                        <option value="AUD/USD">AUD/USD</option>
-                                        <option value="USD/CAD">USD/CAD</option>
-                                        <option value="NZD/USD">NZD/USD</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Amount (units)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="amount"
-                                        value={tradeAmount || ''}
-                                        onChange={(e) => setTradeAmount(parseFloat(e.target.value) || 0)}
-                                        required
-                                        min="1"
-                                        step="1"
-                                        placeholder="1000"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
-                                    />
-                                </div>
-
-                                {/* Live Rate Display */}
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-medium text-gray-700">Current Market Rate</span>
-                                        {fetchingRate && <span className="text-xs text-blue-600">Fetching...</span>}
-                                    </div>
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {liveRate ? liveRate.toFixed(4) : '-'}
-                                    </div>
-                                    {liveRate && tradeAmount > 0 && (
-                                        <div className="mt-3 pt-3 border-t border-blue-200">
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-gray-600">Total Value</span>
-                                                <span className="font-bold text-gray-900">
-                                                    ${(liveRate * tradeAmount).toFixed(2)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex gap-3 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowBuyModal(false)}
-                                        className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition currency-cursor"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="flex-1 btn-primary currency-cursor"
-                                    >
-                                        Place Order
-                                    </button>
-                                </div>
-                            </form>
-                        </Card>
-                    </div>
-                )}
+                {/* Trade Modal */}
+                <TradeModal
+                    isOpen={showTradeModal}
+                    onClose={() => setShowTradeModal(false)}
+                    onSuccess={fetchPortfolio}
+                />
             </div>
         </ProtectedRoute>
     );

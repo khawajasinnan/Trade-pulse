@@ -13,14 +13,25 @@ export const getDashboardData = async (_req: Request, res: Response) => {
         // Fetch live market data from APIs
         const marketData = await getMarketDashboardData();
 
-        // Get news sentiment summary
-        const newsCount = await prisma.news.count();
-        const positiveSentiment = await prisma.news.count({
-            where: { sentiment: 'POSITIVE' },
-        });
-        const negativeSentiment = await prisma.news.count({
-            where: { sentiment: 'NEGATIVE' },
-        });
+        // Get news sentiment summary (safely - avoid throwing if DB unreachable)
+        let newsCount = 0;
+        let positiveSentiment = 0;
+        let negativeSentiment = 0;
+        try {
+            newsCount = await prisma.news.count();
+            positiveSentiment = await prisma.news.count({
+                where: { sentiment: 'POSITIVE' },
+            });
+            negativeSentiment = await prisma.news.count({
+                where: { sentiment: 'NEGATIVE' },
+            });
+        } catch (dbErr) {
+            console.warn('Warning: Could not fetch news counts from DB:', (dbErr as any)?.message || dbErr);
+            // Fall back to zero counts
+            newsCount = 0;
+            positiveSentiment = 0;
+            negativeSentiment = 0;
+        }
 
         return res.json({
             currencyPairs: marketData.gainers.concat(marketData.losers),

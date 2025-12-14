@@ -34,6 +34,14 @@ A full-stack financial analytics web platform with real-time forex data, ML-base
 - **Admin** - Full system access including user management and monitoring
 
 ## 🛠️ Technology Stack
+   Edit `.env` and add your configuration:
+   ```env
+   SMTP_HOST="your_smtp_host"
+   SMTP_PORT=587
+   SMTP_USER="your_smtp_user"
+   SMTP_PASS="your_smtp_password"
+   EMAIL_FROM="no-reply@yourdomain.com"
+   ```
 
 ### Backend
 - **Runtime**: Node.js with TypeScript
@@ -57,6 +65,25 @@ A full-stack financial analytics web platform with real-time forex data, ML-base
 - **Icons**: Lucide React
 
 ## 📦 Project Structure
+### Email & OTP Configuration
+The application uses SMTP to send verification emails and alert notifications. Set the following env variables in the `backend/.env` file:
+
+- SMTP_HOST: SMTP server host
+- SMTP_PORT: SMTP server port (465 for secure SSL, 587 for TLS)
+- SMTP_USER: SMTP username
+- SMTP_PASS: SMTP password
+- EMAIL_FROM: The from address used for outgoing emails (e.g., no-reply@yourdomain.com)
+
+If no SMTP config is provided, emails will be logged to the server console for debugging.
+
+Run Prisma migrations to include email verification fields before starting the app:
+
+```bash
+cd backend
+npm run prisma:generate
+npm run prisma:migrate
+```
+
 
 ```
 Trade-Pulse/

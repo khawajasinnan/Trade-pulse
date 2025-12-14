@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function seedAdmin() {
     try {
         const adminEmail = process.env.ADMIN_EMAIL || 'admin@tradepulse.com';
-        const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123!';
+        const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
 
         console.log(`🔍 Checking for existing admin account: ${adminEmail}`);
 
@@ -26,7 +26,7 @@ async function seedAdmin() {
                 console.log('✅ Updated existing user to Admin role');
             }
         } else {
-            const hashedPassword = await bcrypt.hash(adminPassword, 10);
+            const hashedPassword = await bcrypt.hash(adminPassword, 12);
 
             await prisma.user.create({
                 data: {

@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { isDbBlocked } from '../utils/db-utils';
+// OTP/email verification removed — keep mail service import removed
 
 const prisma = new PrismaClient();
 
@@ -15,6 +17,10 @@ const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
  */
 export const signup = async (req: Request, res: Response) => {
     try {
+        if (isDbBlocked()) {
+            console.warn('Signup blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
         const { name, email, password, role = 'BasicUser' } = req.body;
 
         // Prevent admin signup
@@ -53,24 +59,30 @@ export const signup = async (req: Request, res: Response) => {
             },
         });
 
-        // Generate JWT token
+        // Email verification removed — no additional DB update required
+
+        // Generate token for user to allow immediate login
         const token = jwt.sign(
             { userId: user.id, email: user.email, role: user.role },
             process.env.JWT_SECRET as string,
             { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'] }
         );
 
-        // Set httpOnly cookie
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         return res.status(201).json({
             message: 'Account created successfully',
-            user,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
             token,
         });
     } catch (error) {
@@ -84,6 +96,10 @@ export const signup = async (req: Request, res: Response) => {
  */
 export const login = async (req: Request, res: Response) => {
     try {
+        if (isDbBlocked()) {
+            console.warn('Login blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
         const { email, password } = req.body;
         const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
         const userAgent = req.headers['user-agent'] || 'unknown';
@@ -151,6 +167,8 @@ export const login = async (req: Request, res: Response) => {
                 }
             }
         }
+
+        // Email verification removed — allow login without verification
 
         // Verify password
         const isValidPassword = await bcrypt.compare(password, user.passwordHash);
@@ -273,12 +291,15 @@ export const getCurrentUser = async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ error: 'Failed to get user' });
     }
 };
-
 /**
  * Change password
  */
 export const changePassword = async (req: AuthRequest, res: Response) => {
     try {
+        if (isDbBlocked()) {
+            console.warn('Change password blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
         if (!req.user) {
             return res.status(401).json({ error: 'Not authenticated' });
         }

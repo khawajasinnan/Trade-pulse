@@ -147,7 +147,7 @@ export default function SentimentPage() {
                                 >
                                     {f}
                                 </button>
-                            ))}}
+                            ))}
                         </div>
                     </Card>
 

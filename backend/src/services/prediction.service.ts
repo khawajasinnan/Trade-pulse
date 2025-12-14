@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { PrismaClient } from '@prisma/client';
+import { isDbBlocked } from '../utils/db-utils';
 import { getRealTimeRate } from './forex.service';
 import * as path from 'path';
 
@@ -8,7 +9,12 @@ const execAsync = promisify(exec);
 const prisma = new PrismaClient();
 
 const PYTHON_SCRIPT_PATH = path.join(process.cwd(), 'ml-service', 'ml_prediction.py');
-const PYTHON_VENV_PATH = path.join(process.cwd(), 'ml-service', 'venv', 'bin', 'python3');
+// Use .venv directory. Allow override via ML_PYTHON_CMD env var
+const CANDIDATE_PYTHONS = [
+    process.env.ML_PYTHON_CMD || '',
+    path.join(process.cwd(), 'ml-service', '.venv', 'bin', 'python3'),
+    'python3',
+];
 
 /**
  * Train model and make prediction using Python service
@@ -35,8 +41,34 @@ export async function trainAndPredict(
             throw new Error('ML prediction script not found');
         }
 
-        // Use venv Python if available, fallback to system python3
-        const pythonCmd = fs.existsSync(PYTHON_VENV_PATH) ? PYTHON_VENV_PATH : 'python3';
+        // Determine python command: prefer explicit candidates that have required packages
+        let pythonCmd: string | null = null;
+        const failedCandidates: Array<{ candidate: string, errors: string[] }> = [];
+
+        for (const candidate of CANDIDATE_PYTHONS) {
+            if (!candidate) continue;
+            try {
+                const check = await checkPythonEnvironment(candidate);
+                if (check.pythonInstalled && check.packagesInstalled) {
+                    pythonCmd = candidate;
+                    console.log(`Using Python for ML: ${candidate}`);
+                    break;
+                } else {
+                    // Collect failures but only log if no candidate works
+                    failedCandidates.push({ candidate, errors: check.errors });
+                }
+            } catch (err) {
+                failedCandidates.push({ candidate, errors: [(err as any)?.message || String(err)] });
+            }
+        }
+
+        if (!pythonCmd) {
+            console.warn('No suitable Python environment found for ML.');
+            failedCandidates.forEach(({ candidate, errors }) => {
+                console.warn(`  ${candidate}: ${errors.join(', ')}`);
+            });
+            throw new Error('Python environment missing');
+        }
 
         // Ensure latest real-time rate is present in DB so ML script trains on freshest data
         try {
@@ -44,24 +76,28 @@ export async function trainAndPredict(
             const latestRate = await getRealTimeRate(base, target);
 
             // Upsert a historical data point for now
-            await prisma.historicalData.upsert({
-                where: {
-                    currencyPair_date: {
+            if (!isDbBlocked()) {
+                await prisma.historicalData.upsert({
+                    where: {
+                        currencyPair_date: {
+                            currencyPair,
+                            date: new Date(),
+                        },
+                    },
+                    update: { close: latestRate },
+                    create: {
                         currencyPair,
                         date: new Date(),
+                        open: latestRate,
+                        high: latestRate,
+                        low: latestRate,
+                        close: latestRate,
+                        volume: 0,
                     },
-                },
-                update: { close: latestRate },
-                create: {
-                    currencyPair,
-                    date: new Date(),
-                    open: latestRate,
-                    high: latestRate,
-                    low: latestRate,
-                    close: latestRate,
-                    volume: 0,
-                },
-            });
+                });
+            } else {
+                console.warn('Skipping historicalData upsert because DB writes are currently blocked');
+            }
         } catch (e) {
             console.warn('Failed to store latest rate for ML training:', (e as any)?.message || String(e));
         }
@@ -69,9 +105,10 @@ export async function trainAndPredict(
         // Call Python script with shorter timeout to prevent socket hangups
         const command = `${pythonCmd} ${PYTHON_SCRIPT_PATH} "${databaseUrl}" "${currencyPair}"`;
 
+        // Increase timeout to allow training to complete on slower machines
         const { stdout, stderr } = await execAsync(command, {
-            timeout: 30000, // 30 seconds timeout (prevents socket hangup)
-            maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+            timeout: parseInt(process.env.ML_PREDICTION_TIMEOUT_MS || '120000'), // 120 seconds default
+            maxBuffer: parseInt(process.env.ML_PREDICTION_MAX_BUFFER || String(10 * 1024 * 1024)),
         });
 
         // Log stderr for debugging but don't fail on warnings
@@ -88,12 +125,31 @@ export async function trainAndPredict(
         }
 
         // Parse JSON result from stdout
-        const resultMatch = stdout.match(/=== RESULT ===\n([\s\S]+)/);
-        if (!resultMatch) {
+        // Robustly find JSON in stdout after the marker '=== RESULT ==='
+        let result: any = null;
+        try {
+            const markerIndex = stdout.lastIndexOf('=== RESULT ===');
+            if (markerIndex >= 0) {
+                const jsonPart = stdout.substring(markerIndex + '=== RESULT ==='.length).trim();
+                // Find the last JSON object in the string (if there are trailing logs)
+                const firstBrace = jsonPart.indexOf('{');
+                const lastBrace = jsonPart.lastIndexOf('}');
+                if (firstBrace >= 0 && lastBrace >= 0) {
+                    const jsonStr = jsonPart.substring(firstBrace, lastBrace + 1).trim();
+                    result = JSON.parse(jsonStr);
+                }
+            } else {
+                // As a fallback, attempt to parse the entire stdout for a JSON object
+                const match = stdout.match(/({[\s\S]*})/);
+                if (match) {
+                    result = JSON.parse(match[1]);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to parse JSON result from Python output. stdout:', stdout);
+            console.error('stderr:', stderr);
             throw new Error('Failed to parse prediction result from Python script');
         }
-
-        const result = JSON.parse(resultMatch[1]);
 
         console.log(`Prediction complete for ${currencyPair}`);
         console.log(`Direction: ${result.direction}, Confidence: ${result.confidence}`);
@@ -105,7 +161,7 @@ export async function trainAndPredict(
             recommendation: result.recommendation as 'BUY' | 'SELL' | 'HOLD',
         };
     } catch (error: any) {
-        console.log(`Using fallback prediction for ${currencyPair}`);
+        console.warn(`Using fallback prediction for ${currencyPair}. Reason:`, (error as any)?.message || error);
 
         try {
             const cachedPrediction = await prisma.prediction.findFirst({
@@ -205,7 +261,7 @@ export async function batchPredict(currencyPairs: string[]) {
 /**
  * Check if Python and required packages are installed
  */
-export async function checkPythonEnvironment(): Promise<{
+export async function checkPythonEnvironment(pythonCmd?: string): Promise<{
     pythonInstalled: boolean;
     packagesInstalled: boolean;
     errors: string[];
@@ -216,7 +272,8 @@ export async function checkPythonEnvironment(): Promise<{
 
     try {
         // Check Python installation
-        const { stdout: pythonVersion } = await execAsync('python3 --version');
+        const checkCmd = pythonCmd ? `${pythonCmd} --version` : 'python3 --version';
+        const { stdout: pythonVersion } = await execAsync(checkCmd);
         pythonInstalled = true;
         console.log('Python version:', pythonVersion.trim());
     } catch (error) {
@@ -226,7 +283,8 @@ export async function checkPythonEnvironment(): Promise<{
     if (pythonInstalled) {
         try {
             // Check if required packages are installed
-            await execAsync('python3 -c "import tensorflow, pandas, numpy, sklearn"');
+            const pkgCheckCmd = pythonCmd ? `${pythonCmd} -c "import tensorflow, pandas, numpy, sklearn"` : 'python3 -c "import tensorflow, pandas, numpy, sklearn"';
+            await execAsync(pkgCheckCmd);
             packagesInstalled = true;
         } catch (error) {
             errors.push('Required Python packages not installed. Run: pip3 install -r ml-service/requirements.txt');

@@ -14,8 +14,9 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    signup: (name: string, email: string, password: string, role?: string) => Promise<void>;
+    signup: (name: string, email: string, password: string, role?: string) => Promise<any>;
     logout: () => Promise<void>;
+    loginWithToken: (token: string) => Promise<void>;
     isAuthenticated: boolean;
     isAdmin: boolean;
     isTrader: boolean;
@@ -61,31 +62,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const loginWithToken = async (token: string) => {
+        try {
+            localStorage.setItem('token', token);
+            const response = await authAPI.getCurrentUser();
+            setUser(response.data.user);
+        } catch (error) {
+            console.error('loginWithToken failed', error);
+            // Fall back to clearing token if check fails
+            localStorage.removeItem('token');
+            setUser(null);
+        }
+    };
+
     const signup = async (name: string, email: string, password: string, role?: string) => {
         try {
-            const response = await fetch('/api/auth/signup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({ name, email, password, role: role || 'BasicUser' }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                // Extract detailed validation errors if available
-                if (data.details && Array.isArray(data.details)) {
-                    const errorMessages = data.details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
-                    throw new Error(errorMessages);
-                }
-                throw new Error(data.error || 'Signup failed');
+            const response = await authAPI.signup({ name, email, password, role: role || 'BasicUser' });
+            const { user, token } = response.data;
+            // Set token and user locally
+            if (token) {
+                localStorage.setItem('token', token);
             }
-
-            setUser(data.user);
+            if (user) {
+                localStorage.setItem('user', JSON.stringify(user));
+                setUser(user);
+            }
+            return response.data;
         } catch (error: any) {
-            throw new Error(error.message || 'Signup failed');
+            throw new Error(error.response?.data?.error || error.message || 'Signup failed');
         }
     };
 
@@ -107,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         signup,
         logout,
+        loginWithToken,
         isAuthenticated: !!user,
         isAdmin: user?.role === 'Admin',
         isTrader: user?.role === 'Trader' || user?.role === 'Admin',

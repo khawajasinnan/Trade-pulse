@@ -50,6 +50,7 @@ export const authAPI = {
 
     login: (data: { email: string; password: string }) =>
         api.post('/auth/login', data),
+    // email verification endpoints removed
 
     logout: () => api.post('/auth/logout'),
 

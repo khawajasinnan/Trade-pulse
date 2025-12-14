@@ -1,6 +1,7 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import { PrismaClient } from '@prisma/client';
+import { isDbBlocked, blockDbWrites } from '../utils/db-utils';
 
 const prisma = new PrismaClient();
 
@@ -231,39 +232,46 @@ export const getRealTimeRate = async (
             }
         }
 
-        // Store in database for historical analysis
-        try {
-            await prisma.exchangeRate.create({
-                data: {
-                    baseCurrency: fromCurrency,
-                    targetCurrency: toCurrency,
-                    rate,
-                },
-            });
+        // Store in database for historical analysis only if DB not blocked
+        if (!isDbBlocked()) {
+            try {
+                await prisma.exchangeRate.create({
+                    data: {
+                        baseCurrency: fromCurrency,
+                        targetCurrency: toCurrency,
+                        rate,
+                    },
+                });
 
-            // Also store in HistoricalData table for ML training
-            const currencyPair = `${fromCurrency}-${toCurrency}`;
-            await prisma.historicalData.upsert({
-                where: {
-                    currencyPair_date: {
+                // Also store in HistoricalData table for ML training
+                const currencyPair = `${fromCurrency}-${toCurrency}`;
+                await prisma.historicalData.upsert({
+                    where: {
+                        currencyPair_date: {
+                            currencyPair,
+                            date: new Date(),
+                        },
+                    },
+                    update: { close: rate },
+                    create: {
                         currencyPair,
                         date: new Date(),
+                        open: rate,
+                        high: rate,
+                        low: rate,
+                        close: rate,
+                        volume: 0,
                     },
-                },
-                update: { close: rate },
-                create: {
-                    currencyPair,
-                    date: new Date(),
-                    open: rate,
-                    high: rate,
-                    low: rate,
-                    close: rate,
-                    volume: 0,
-                },
-            });
-        } catch (dbError) {
-            console.error('Failed to store rate in database:', dbError);
-            // Continue anyway - we have the rate
+                });
+            } catch (dbError: any) {
+                console.error('Failed to store rate in database:', dbError);
+                // Block further DB writes for a short time if pool exhausted or DB unreachable
+                const code = dbError?.code || dbError?.meta?.code || dbError?.name;
+                if (code === 'P1001' || code === 'P2024' || code === 'PrismaClientInitializationError') {
+                    console.warn('Detected Prisma DB connectivity error - blocking DB writes for 30s');
+                    blockDbWrites(30);
+                }
+            }
         }
 
         // Cache for 5 minutes
@@ -317,17 +325,22 @@ export const getMultipleRates = async (
 ): Promise<{ [key: string]: number }> => {
     const rates: { [key: string]: number } = {};
 
-    // Fetch in parallel for speed
-    await Promise.all(
-        targetCurrencies.map(async (target) => {
-            try {
-                rates[target] = await getRealTimeRate(baseCurrency, target);
-            } catch (error) {
-                console.error(`Failed to fetch rate for ${baseCurrency}/${target}`);
-                rates[target] = 1.0; // Fallback
-            }
-        })
-    );
+    // Limit concurrency to avoid exhausting DB / Prisma connection pool
+    const concurrencyLimit = parseInt(process.env.FOREX_FETCH_CONCURRENCY || '3');
+    // Process in chunks to control concurrency
+    for (let i = 0; i < targetCurrencies.length; i += concurrencyLimit) {
+        const chunk = targetCurrencies.slice(i, i + concurrencyLimit);
+        await Promise.all(
+            chunk.map(async (target) => {
+                try {
+                    rates[target] = await getRealTimeRate(baseCurrency, target);
+                } catch (error) {
+                    console.error(`Failed to fetch rate for ${baseCurrency}/${target}:`, (error as any)?.message || error);
+                    rates[target] = 1.0; // Fallback
+                }
+            })
+        );
+    }
 
     return rates;
 };

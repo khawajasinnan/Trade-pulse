@@ -39,7 +39,7 @@ export default function HomePage() {
             <div className="relative hero-gradient overflow-hidden">
                 <HeroAnimation />
 
-                <div className="container mx-auto px-4 py-20 md:py-32 relative z-10">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 md:py-32 relative z-10">
                     <div className="text-center mb-20 animate-fade-in-up">
                         {/* Badge */}
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-md border border-primary-200/50 mb-8 shadow-lg animate-fade-in-down">
@@ -48,24 +48,24 @@ export default function HomePage() {
                         </div>
 
                         {/* Main Heading */}
-                        <h1 className="text-5xl md:text-7xl font-bold mb-6">
+                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
                             <span className="text-gray-900">Trade</span>
                             <span className="gradient-text-emerald">-Pulse</span>
                         </h1>
 
                         {/* Subheading */}
-                        <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
+                        <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed px-4">
                             Harness the power of <span className="font-semibold text-primary-600">machine learning</span> and
                             <span className="font-semibold text-accent-600"> real-time analytics</span> to make smarter trading decisions
                         </p>
 
                         {/* CTA Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                            <Link href="/signup" className="btn-primary group">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center px-4 sm:px-0">
+                            <Link href="/signup" className="btn-primary group text-center">
                                 Get Started Free
                                 <ArrowRight className="inline-block ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                             </Link>
-                            <Link href="/login" className="btn-secondary group">
+                            <Link href="/login" className="btn-secondary group text-center">
                                 Sign In
                                 <TrendingUp className="inline-block ml-2 w-5 h-5 group-hover:scale-110 transition-transform" />
                             </Link>
@@ -100,17 +100,17 @@ export default function HomePage() {
             </div>
 
             {/* Features Grid */}
-            <div className="container mx-auto px-4 py-20">
-                <div className="text-center mb-16">
-                    <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+                <div className="text-center mb-12 sm:mb-16">
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-4">
                         Powerful Features for <span className="gradient-text-emerald">Smart Trading</span>
                     </h2>
-                    <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                    <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
                         Everything you need to analyze markets, predict trends, and manage your portfolio
                     </p>
                 </div>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                     <FeatureCard
                         icon={<TrendingUp className="w-12 h-12" />}
                         title="Real-Time Forex Data"
@@ -157,8 +157,8 @@ export default function HomePage() {
             </div>
 
             {/* Stats Section */}
-            <div className="relative py-20 particles-bg">
-                <div className="container mx-auto px-4">
+            <div className="relative py-12 sm:py-16 lg:py-20 particles-bg">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                         <StatCard number={15} label="Currencies" suffix="+" />
                         <StatCard number={100} label="Accuracy" suffix="%" />
@@ -169,23 +169,23 @@ export default function HomePage() {
             </div>
 
             {/* CTA Section */}
-            <div className="container mx-auto px-4 py-20">
-                <GlassCard premium className="p-12 md:p-16 text-center relative overflow-hidden">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+                <GlassCard premium className="p-8 sm:p-12 md:p-16 text-center relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl"></div>
                     <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent-500/10 rounded-full blur-3xl"></div>
 
                     <div className="relative z-10">
-                        <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-6">
                             Ready to Start Trading <span className="gradient-text-emerald">Smarter?</span>
                         </h2>
-                        <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+                        <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-8 sm:mb-10 max-w-2xl mx-auto px-4">
                             Join thousands of traders using AI-powered analytics to maximize their returns
                         </p>
-                        <Link href="/signup" className="btn-primary text-lg group">
+                        <Link href="/signup" className="btn-primary text-base sm:text-lg group inline-block">
                             Create Free Account
                             <ArrowRight className="inline-block ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Link>
-                        <p className="mt-4 text-sm text-gray-500">No credit card required • Setup in 2 minutes</p>
+                        <p className="mt-4 text-xs sm:text-sm text-gray-500">No credit card required • Setup in 2 minutes</p>
                     </div>
                 </GlassCard>
             </div>

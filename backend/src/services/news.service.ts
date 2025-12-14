@@ -1,6 +1,7 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import { PrismaClient } from '@prisma/client';
+import { isDbBlocked } from '../utils/db-utils';
 import { analyzeSentiment } from './sentiment.service';
 
 const prisma = new PrismaClient();
@@ -77,9 +78,13 @@ export const fetchFinancialNews = async (
 
             // Store in database
             try {
-                await prisma.news.create({
-                    data: newsData,
-                });
+                if (!isDbBlocked()) {
+                    await prisma.news.create({
+                        data: newsData,
+                    });
+                } else {
+                    console.warn('Skipping news DB write because DB writes are currently blocked');
+                }
             } catch (error) {
                 // Ignore duplicate errors
                 console.error('Error storing news:', error);
@@ -94,10 +99,16 @@ export const fetchFinancialNews = async (
         console.error('Error fetching news:', error);
 
         // Fallback to database
-        const dbNews = await prisma.news.findMany({
-            orderBy: { publishedAt: 'desc' },
-            take: pageSize,
-        });
+        let dbNews: any[] = [];
+        try {
+            dbNews = await prisma.news.findMany({
+                orderBy: { publishedAt: 'desc' },
+                take: pageSize,
+            });
+        } catch (dbErr) {
+            console.error('Failed to fetch news from DB fallback:', dbErr);
+            dbNews = [];
+        }
 
         if (dbNews.length > 0) {
             return dbNews;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { dashboardAPI } from '../../services/api.service';
 import Navbar from '../../components/Navbar';
 import ProtectedRoute from '../../components/ProtectedRoute';
@@ -38,6 +39,7 @@ interface DashboardData {
 
 export default function DashboardPage() {
     const { user } = useAuth();
+    const { showSuccess, showError } = useToast();
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -141,9 +143,10 @@ export default function DashboardPage() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            showSuccess('PDF report exported successfully!');
         } catch (error) {
             console.error('PDF export error:', error);
-            alert('Failed to export PDF. Please try again.');
+            showError('Failed to export PDF. Please try again.');
         }
     };
 
@@ -174,9 +177,10 @@ export default function DashboardPage() {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            showSuccess('Excel report exported successfully!');
         } catch (error) {
             console.error('Excel export error:', error);
-            alert('Failed to export Excel. Please try again.');
+            showError('Failed to export Excel. Please try again.');
         }
     };
 
@@ -186,46 +190,48 @@ export default function DashboardPage() {
             <div className="min-h-screen bg-gray-50 pt-16">
                 {/* Header */}
                 <div className="bg-white shadow-sm border-b">
-                    <div className="container mx-auto px-4 py-4">
-                        <div className="flex justify-between items-center flex-wrap gap-4">
+                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
                                 <p className="text-sm text-gray-600">Welcome back, {user?.name}</p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
                                 {/* Export buttons - Only for Traders */}
                                 {user?.role === 'Trader' && (
                                     <>
                                         <button
                                             onClick={handleExportPDF}
-                                            className="flex items-center gap-2 bg-danger hover:bg-danger-dark text-white px-4 py-2 rounded-lg transition text-sm currency-cursor"
+                                            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg transition text-sm currency-cursor flex-1 sm:flex-none justify-center"
+                                            title="Export PDF"
                                         >
                                             <FileDown className="w-4 h-4" />
-                                            Export PDF
+                                            <span className="hidden sm:inline">PDF</span>
                                         </button>
                                         <button
                                             onClick={handleExportExcel}
-                                            className="flex items-center gap-2 bg-success hover:bg-success-dark text-white px-4 py-2 rounded-lg transition text-sm currency-cursor"
+                                            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg transition text-sm currency-cursor flex-1 sm:flex-none justify-center"
+                                            title="Export Excel"
                                         >
                                             <FileDown className="w-4 h-4" />
-                                            Export Excel
+                                            <span className="hidden sm:inline">Excel</span>
                                         </button>
                                     </>
                                 )}
                                 {/* Refresh button - Available to all users */}
                                 <button
                                     onClick={fetchDashboardData}
-                                    className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition currency-cursor"
+                                    className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-3 sm:px-4 py-2 rounded-lg transition currency-cursor flex-1 sm:flex-none justify-center"
                                 >
-                                    <RefreshCw className="w-4 h-4" />
-                                    Refresh
+                                    <RefreshCw className=" w-4 h-4" />
+                                    <span className="hidden sm:inline">Refresh</span>
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="container mx-auto px-4 py-8">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                     {error && (
                         <div className="mb-6 p-4 bg-danger-light/20 border border-danger rounded-lg flex items-start gap-3">
                             <AlertCircle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
@@ -236,7 +242,7 @@ export default function DashboardPage() {
                     {/* Market Summary */}
                     {data && (
                         <>
-                            <div className="grid md:grid-cols-4 gap-6 mb-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
                                 <SummaryCard
                                     title="Total Pairs"
                                     value={data.stats.totalPairs}
@@ -260,7 +266,7 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Top Movers */}
-                            <div className="grid md:grid-cols-2 gap-6 mb-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
                                 <div className="bg-white rounded-xl shadow-md p-6">
                                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                                         <TrendingUp className="w-6 h-6 text-success" />
@@ -305,9 +311,9 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Live Rates Grid */}
-                            <div className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-xl font-bold text-gray-900 mb-4">Live Currency Rates</h2>
-                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Live Currency Rates</h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                                     {data.currencyPairs.map((rate: any, index: number) => (
                                         <div key={index} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition">
                                             <div className="flex justify-between items-start mb-2">

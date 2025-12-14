@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRef } from 'react';
+import { useToast } from '../../contexts/ToastContext';
 import Navbar from '../../components/Navbar';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Card from '../../components/Card';
-import { BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
+import TradeModal from '../../components/TradeModal';
+import { BarChart3, TrendingUp, TrendingDown, Plus } from 'lucide-react';
 import {
     LineChart,
     Line,
@@ -21,10 +23,12 @@ import {
 import { historicalAPI, converterAPI } from '../../services/api.service';
 
 export default function ChartsPage() {
+    const { showSuccess } = useToast();
     const [selectedPair, setSelectedPair] = useState('EUR/USD');
     const [timeframe, setTimeframe] = useState('1D');
     const [chartData, setChartData] = useState<any[]>([]);
     const [candlestickData, setCandlestickData] = useState<any[]>([]);
+    const [showTradeModal, setShowTradeModal] = useState(false);
 
     const currencyPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD'];
     const timeframes = ['1D', '1W', '1M', '3M', '1Y'];
@@ -218,20 +222,20 @@ export default function ChartsPage() {
     return (
         <ProtectedRoute>
             <Navbar />
-            <div className="min-h-screen pt-20 pb-12">
-                <div className="container mx-auto px-4">
+            <div className="min-h-screen pt-20 pb-12 bg-gradient-to-br from-gray-50 to-gray-100">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     {/* Header */}
                     <div className="mb-8 animate-fade-in-down">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                            <BarChart3 className="w-10 h-10 text-primary-500" />
+                        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                            <BarChart3 className="w-8 h-8 sm:w-10 sm:h-10 text-primary-500" />
                             Advanced Charts
                         </h1>
-                        <p className="text-gray-600">Interactive line and candlestick charts with real-time data</p>
+                        <p className="text-sm sm:text-base text-gray-600">Interactive line and candlestick charts with real-time data</p>
                     </div>
 
                     {/* Controls */}
-                    <div className="grid md:grid-cols-2 gap-6 mb-6">
-                        <Card variant="glass">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+                        <Card variant="glass" className="p-4 sm:p-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Currency Pair</label>
                             <div className="flex flex-wrap gap-2">
                                 {currencyPairs.map((pair) => (
@@ -239,8 +243,8 @@ export default function ChartsPage() {
                                         key={pair}
                                         onClick={() => setSelectedPair(pair)}
                                         className={`px-4 py-2 rounded-lg font-medium transition-all currency-cursor ${selectedPair === pair
-                                                ? 'bg-primary-500 text-white shadow-md'
-                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            ? 'bg-primary-500 text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                             }`}
                                     >
                                         {pair}
@@ -257,8 +261,8 @@ export default function ChartsPage() {
                                         key={tf}
                                         onClick={() => setTimeframe(tf)}
                                         className={`px-4 py-2 rounded-lg font-medium transition-all currency-cursor ${timeframe === tf
-                                                ? 'bg-accent-500 text-white shadow-md'
-                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            ? 'bg-accent-500 text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                             }`}
                                     >
                                         {tf}
@@ -268,25 +272,32 @@ export default function ChartsPage() {
                         </Card>
                     </div>
 
-                    {/* Current Price Card */}
-                    <Card variant="glass" className="mb-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">{selectedPair}</p>
-                                <p className="text-4xl font-bold text-gray-900">{currentPrice.toFixed(5)}</p>
+                    {/* Current Price Card with Quick Trade */}
+                    <Card variant="glass" className="mb-6 p-4 sm:p-6 bg-gradient-to-br from-primary-50 to-primary-100">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="w-full sm:w-auto">
+                                <p className="text-xs sm:text-sm text-gray-600 mb-2">{selectedPair}</p>
+                                <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-2">{currentPrice.toFixed(5)}</p>
+                                <div className={`flex items-center gap-2 ${isPositive ? 'text-success' : 'text-danger'}`}>
+                                    {isPositive ? <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8" /> : <TrendingDown className="w-6 h-6 sm:w-8 sm:h-8" />}
+                                    <span className="text-xl sm:text-2xl font-bold">
+                                        {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                                    </span>
+                                </div>
                             </div>
-                            <div className={`flex items-center gap-2 ${isPositive ? 'text-success' : 'text-danger'}`}>
-                                {isPositive ? <TrendingUp className="w-8 h-8" /> : <TrendingDown className="w-8 h-8" />}
-                                <span className="text-2xl font-bold">
-                                    {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                                </span>
-                            </div>
+                            <button
+                                onClick={() => setShowTradeModal(true)}
+                                className="btn-primary flex items-center gap-2 currency-cursor w-full sm:w-auto justify-center text-base sm:text-lg px-6 py-3 shadow-lg hover:shadow-xl"
+                            >
+                                <Plus className="w-5 h-5" />
+                                Quick Trade
+                            </button>
                         </div>
                     </Card>
 
                     {/* Line Chart */}
-                    <Card variant="glass" className="mb-6">
-                        <h3 className="text-xl font-bold text-gray-900 mb-4">Price Trend</h3>
+                    <Card variant="glass" className="mb-6 p-4 sm:p-6">
+                        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Price Trend</h3>
                         <ResponsiveContainer width="100%" height={400}>
                             <LineChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -322,8 +333,8 @@ export default function ChartsPage() {
                     </Card>
 
                     {/* Candlestick Chart */}
-                    <Card variant="glass" className="mb-6">
-                        <h3 className="text-xl font-bold text-gray-900 mb-4">Candlestick Chart</h3>
+                    <Card variant="glass" className="mb-6 p-4 sm:p-6">
+                        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Candlestick Chart</h3>
                         <ResponsiveContainer width="100%" height={400}>
                             <BarChart data={candlestickData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -410,7 +421,7 @@ export default function ChartsPage() {
                     </Card>
 
                     {/* Stats */}
-                    <div className="grid md:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
                         <Card variant="glass">
                             <p className="text-sm text-gray-600 mb-1">24h High</p>
                             <p className="text-2xl font-bold text-gray-900">
@@ -453,6 +464,17 @@ export default function ChartsPage() {
                         </Card>
                     </div>
                 </div>
+
+                {/* Trade Modal */}
+                <TradeModal
+                    isOpen={showTradeModal}
+                    onClose={() => setShowTradeModal(false)}
+                    onSuccess={() => {
+                        setShowTradeModal(false);
+                        showSuccess('Trade placed successfully! View your portfolio to see updates.');
+                    }}
+                    defaultCurrency={selectedPair}
+                />
             </div>
         </ProtectedRoute>
     );

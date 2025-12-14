@@ -39,6 +39,8 @@ export const resetPasswordSchema = z.object({
         ),
 });
 
+// Email verification schemas removed (OTP functionality disabled)
+
 // Portfolio schemas
 export const addPortfolioSchema = z.object({
     currency: z.string().min(3).max(10), // Allow currency pairs like EUR/USD

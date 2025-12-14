@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { isDbBlocked } from '../utils/db-utils';
 
 const prisma = new PrismaClient();
 
@@ -68,6 +69,11 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ error: 'Cannot change admin role' });
         }
 
+        if (isDbBlocked()) {
+            console.warn('Admin update user role blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
+
         const updated = await prisma.user.update({
             where: { id: userId },
             data: { role },
@@ -108,6 +114,11 @@ export const toggleUserBan = async (req: AuthRequest, res: Response) => {
 
         if (user.role === 'Admin') {
             return res.status(403).json({ error: 'Cannot ban admin user' });
+        }
+
+        if (isDbBlocked()) {
+            console.warn('Admin toggle ban blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
         }
 
         const updated = await prisma.user.update({

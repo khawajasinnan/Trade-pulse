@@ -37,6 +37,18 @@ export default function Navbar() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // Lock body scroll when mobile menu is open
+    useEffect(() => {
+        if (isMobileMenuOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isMobileMenuOpen]);
+
     const handleLogout = async () => {
         await logout();
         router.push('/');
@@ -103,7 +115,7 @@ export default function Navbar() {
                 : 'bg-white/70 backdrop-blur-sm'
                 }`}
         >
-            <div className="container mx-auto px-4">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
                     <Link href="/dashboard" className="flex items-center gap-2 group">
@@ -215,48 +227,57 @@ export default function Navbar() {
 
                 {/* Mobile Menu */}
                 {isMobileMenuOpen && (
-                    <div className="md:hidden py-4 animate-fade-in-down">
-                        <div className="flex flex-col gap-2">
-                            {filteredLinks.map((link) => {
-                                const Icon = link.icon;
-                                const isActive = pathname === link.href;
+                    <>
+                        {/* Backdrop */}
+                        <div
+                            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[-1] md:hidden animate-fade-in"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                        />
 
-                                return (
-                                    <Link
-                                        key={link.href}
-                                        href={link.href}
-                                        onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
-                                            ? 'bg-primary-500 text-white shadow-md'
-                                            : 'text-gray-700 hover:bg-gray-100'
-                                            }`}
-                                    >
-                                        <Icon className="w-5 h-5" />
-                                        <span className="font-medium">{link.label}</span>
-                                    </Link>
-                                );
-                            })}
+                        {/* Menu */}
+                        <div className="md:hidden py-4 bg-white/95 backdrop-blur-lg shadow-xl rounded-b-2xl animate-fade-in-down">
+                            <div className="flex flex-col gap-2">
+                                {filteredLinks.map((link) => {
+                                    const Icon = link.icon;
+                                    const isActive = pathname === link.href;
 
-                            <div className="border-t border-gray-200 my-2" />
+                                    return (
+                                        <Link
+                                            key={link.href}
+                                            href={link.href}
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
+                                                ? 'bg-primary-500 text-white shadow-md'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            <Icon className="w-5 h-5" />
+                                            <span className="font-medium">{link.label}</span>
+                                        </Link>
+                                    );
+                                })}
 
-                            <Link
-                                href="/profile"
-                                onClick={() => setIsMobileMenuOpen(false)}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-all"
-                            >
-                                <User className="w-5 h-5" />
-                                <span className="font-medium">Profile</span>
-                            </Link>
+                                <div className="border-t border-gray-200 my-2" />
 
-                            <button
-                                onClick={handleLogout}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-all text-left"
-                            >
-                                <LogOut className="w-5 h-5" />
-                                <span className="font-medium">Logout</span>
-                            </button>
+                                <Link
+                                    href="/profile"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-all"
+                                >
+                                    <User className="w-5 h-5" />
+                                    <span className="font-medium">Profile</span>
+                                </Link>
+
+                                <button
+                                    onClick={handleLogout}
+                                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-all text-left"
+                                >
+                                    <LogOut className="w-5 h-5" />
+                                    <span className="font-medium">Logout</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    </>
                 )}
             </div>
         </nav>

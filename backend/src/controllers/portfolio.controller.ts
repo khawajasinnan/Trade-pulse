@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { getRealTimeRate } from '../services/forex.service';
+import { isDbBlocked } from '../utils/db-utils';
 
 const prisma = new PrismaClient();
 
@@ -115,6 +116,10 @@ export const getPortfolio = async (req: AuthRequest, res: Response) => {
  */
 export const addToPortfolio = async (req: AuthRequest, res: Response) => {
     try {
+        if (isDbBlocked()) {
+            console.warn('Add to portfolio blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
         if (!req.user) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -278,6 +283,11 @@ export const updatePortfolioHolding = async (req: AuthRequest, res: Response) =>
         }
 
         // Update holding
+        if (isDbBlocked()) {
+            console.warn('Update portfolio blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
+
         const updated = await prisma.portfolio.update({
             where: { id },
             data: { amount },
@@ -317,6 +327,11 @@ export const deletePortfolioHolding = async (req: AuthRequest, res: Response) =>
         }
 
         // Delete holding
+        if (isDbBlocked()) {
+            console.warn('Delete portfolio blocked - DB writes are currently blocked');
+            return res.status(503).json({ error: 'Service temporarily unavailable - try again later' });
+        }
+
         await prisma.portfolio.delete({
             where: { id },
         });

@@ -34,7 +34,8 @@ npm run dev          # Start frontend (http://localhost:3000)
 ### Python ML Service
 ```bash
 cd ml-service
-source venv/bin/activate  # Activate virtual environment
+./setup-venv.sh .venv
+source .venv/bin/activate  # Activate virtual environment
 python3 ml_prediction.py "DATABASE_URL" "USD/EUR"  # Test prediction
 ```
 

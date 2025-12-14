@@ -9,7 +9,8 @@ import { loginRateLimiter, signupRateLimiter, apiRateLimiter } from '../middlewa
 import { validate } from '../middleware/validation.middleware';
 import * as schemas from '../middleware/validation.middleware';
 import { PrismaClient } from '@prisma/client';
-import { getRealTimeRate, getHistoricalDataFromDB } from '../services/forex.service';
+import { getRealTimeRate, getHistoricalDataFromDB, getMultipleRates } from '../services/forex.service';
+import { isDbBlocked } from '../utils/db-utils';
 import { fetchFinancialNews, getNewsFromDB } from '../services/news.service';
 
 const router = Router();
@@ -78,10 +79,10 @@ router.get('/historical/:currencyPair', apiRateLimiter, async (req, res) => {
 });
 
 // ========== PORTFOLIO ROUTES (Trader/Admin Only) ==========
-router.get('/portfolio', requireAuth, requireTrader, portfolioController.getPortfolio);
-router.post('/portfolio', requireAuth, requireTrader, portfolioController.addToPortfolio);
-router.put('/portfolio/:id', requireAuth, requireTrader, validate(schemas.updatePortfolioSchema), portfolioController.updatePortfolioHolding);
-router.delete('/portfolio/:id', requireAuth, requireTrader, portfolioController.deletePortfolioHolding);
+router.get('/portfolio', requireAuth, portfolioController.getPortfolio);
+router.post('/portfolio', requireAuth, portfolioController.addToPortfolio);
+router.put('/portfolio/:id', requireAuth, validate(schemas.updatePortfolioSchema), portfolioController.updatePortfolioHolding);
+router.delete('/portfolio/:id', requireAuth, portfolioController.deletePortfolioHolding);
 router.get('/portfolio/analytics', requireAuth, requireTrader, portfolioController.getPortfolioAnalytics);
 
 // ========== EXPORT ROUTES (Trader Only) ==========
@@ -144,13 +145,24 @@ router.get('/events', apiRateLimiter, async (req, res: Response) => {
             const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD'];
             const rates: Record<string, number> = {};
 
-            await Promise.all(pairs.map(async (p) => {
+            // Group pairs by base currency to leverage getMultipleRates concurrency control
+            const grouped: Record<string, string[]> = {};
+            for (const p of pairs) {
                 const [from, to] = p.includes('/') ? p.split('/') : p.split('-');
+                if (!grouped[from]) grouped[from] = [];
+                grouped[from].push(to);
+            }
+
+            await Promise.all(Object.keys(grouped).map(async (base) => {
+                const targets = grouped[base];
                 try {
-                    const rate = await getRealTimeRate(from, to);
-                    rates[p] = rate;
+                    const res = await getMultipleRates(base, targets);
+                    for (const t of targets) {
+                        const key = `${base}/${t}`;
+                        rates[key] = res[t];
+                    }
                 } catch (e) {
-                    console.error('SSE rate fetch failed for', p, e);
+                    console.error('SSE grouped rate fetch failed for base', base, e);
                 }
             }));
 
@@ -186,16 +198,22 @@ router.get('/predictions/:currencyPair', requireAuth, requireTrader, async (req:
         );
 
         // Check for recent cached prediction (within last 12 hours)
-        const cachedPrediction = await prisma.prediction.findFirst({
-            where: { currencyPair },
-            orderBy: { createdAt: 'desc' },
-        });
+        let cachedPrediction = null;
+        try {
+            cachedPrediction = await prisma.prediction.findFirst({
+                where: { currencyPair },
+                orderBy: { createdAt: 'desc' },
+            });
+        } catch (dbErr) {
+            console.warn('Warning: Could not read cached prediction from DB, continuing without cache:', (dbErr as any)?.message || dbErr);
+            cachedPrediction = null;
+        }
 
         const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours
         const isCacheValid = cachedPrediction &&
             (Date.now() - cachedPrediction.createdAt.getTime() < CACHE_DURATION);
 
-        if (isCacheValid) {
+        if (isCacheValid && cachedPrediction) {
             // Use cached prediction
             const change = ((cachedPrediction.predictedValue - currentRate) / currentRate) * 100;
             let recommendation: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
@@ -221,15 +239,23 @@ router.get('/predictions/:currencyPair', requireAuth, requireTrader, async (req:
         const mlResult = await trainAndPredict(currencyPair);
 
         // Store new prediction in database
-        await prisma.prediction.create({
-            data: {
-                currencyPair,
-                predictedValue: mlResult.predictedValue,
-                direction: mlResult.direction,
-                confidence: mlResult.confidence,
-                modelVersion: '1.0',
-            },
-        });
+        if (!isDbBlocked()) {
+            try {
+                await prisma.prediction.create({
+                    data: {
+                        currencyPair,
+                        predictedValue: mlResult.predictedValue,
+                        direction: mlResult.direction,
+                        confidence: mlResult.confidence,
+                        modelVersion: '1.0',
+                    },
+                });
+            } catch (dbErr) {
+                console.warn('Failed to create prediction, DB write skipped:', dbErr);
+            }
+        } else {
+            console.warn('Skipping prediction DB write because DB writes are currently blocked');
+        }
 
         return res.json({
             prediction: {
