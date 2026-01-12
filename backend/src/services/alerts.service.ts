@@ -1,4 +1,4 @@
-import { PrismaClient, AlertCondition } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { getRealTimeRate } from './forex.service';
 import { sendMail } from './mail.service';
 import { isDbBlocked } from '../utils/db-utils';
