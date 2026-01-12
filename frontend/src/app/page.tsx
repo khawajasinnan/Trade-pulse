@@ -40,50 +40,50 @@ export default function HomePage() {
                 <HeroAnimation />
 
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 md:py-32 relative z-10">
-                    <div className="text-center mb-20 animate-fade-in-up">
+                    <div className="text-center mb-20">
                         {/* Badge */}
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-md border border-primary-200/50 mb-8 shadow-lg animate-fade-in-down">
-                            <Sparkles className="w-4 h-4 text-primary-500" />
-                            <span className="text-sm font-semibold text-gray-700">AI-Powered Financial Analytics</span>
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 backdrop-blur-md border border-primary-200/50 mb-8 shadow-premium animate-bounce-in hover:scale-105 transition-transform cursor-default">
+                            <Sparkles className="w-4 h-4 text-primary-500 animate-pulse" />
+                            <span className="text-sm font-semibold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">AI-Powered Financial Analytics</span>
                         </div>
 
                         {/* Main Heading */}
-                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
+                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 animate-fade-in-up">
                             <span className="text-gray-900">Trade</span>
-                            <span className="gradient-text-emerald">-Pulse</span>
+                            <span className="gradient-text-emerald animate-gradient-shift">-Pulse</span>
                         </h1>
 
                         {/* Subheading */}
-                        <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed px-4">
+                        <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed px-4 animate-fade-in-up stagger-1">
                             Harness the power of <span className="font-semibold text-primary-600">machine learning</span> and
                             <span className="font-semibold text-accent-600"> real-time analytics</span> to make smarter trading decisions
                         </p>
 
                         {/* CTA Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center px-4 sm:px-0">
-                            <Link href="/signup" className="btn-primary group text-center">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center px-4 sm:px-0 animate-fade-in-up stagger-2">
+                            <Link href="/signup" className="btn-primary group text-center shadow-premium-lg hover:shadow-glow-emerald">
                                 Get Started Free
-                                <ArrowRight className="inline-block ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                <ArrowRight className="inline-block ml-2 w-5 h-5 group-hover:translate-x-2 transition-transform" />
                             </Link>
-                            <Link href="/login" className="btn-secondary group text-center">
+                            <Link href="/login" className="btn-secondary group text-center hover-lift-lg">
                                 Sign In
-                                <TrendingUp className="inline-block ml-2 w-5 h-5 group-hover:scale-110 transition-transform" />
+                                <TrendingUp className="inline-block ml-2 w-5 h-5 group-hover:scale-125 group-hover:rotate-12 transition-all" />
                             </Link>
                         </div>
 
                         {/* Trust Indicators */}
-                        <div className="mt-12 flex flex-wrap justify-center items-center gap-6 text-sm text-gray-500">
-                            <div className="flex items-center gap-2">
+                        <div className="mt-12 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm text-gray-500 animate-fade-in-up stagger-3">
+                            <div className="flex items-center gap-2 hover:text-primary-600 transition-colors">
                                 <Shield className="w-4 h-4 text-primary-500" />
                                 <span>Bank-level Security</span>
                             </div>
                             <div className="w-1 h-1 rounded-full bg-gray-400"></div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 hover:text-accent-600 transition-colors">
                                 <Zap className="w-4 h-4 text-accent-500" />
                                 <span>Real-time Data</span>
                             </div>
                             <div className="w-1 h-1 rounded-full bg-gray-400"></div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 hover:text-primary-600 transition-colors">
                                 <Brain className="w-4 h-4 text-primary-500" />
                                 <span>AI Predictions</span>
                             </div>
@@ -159,7 +159,7 @@ export default function HomePage() {
             {/* Stats Section */}
             <div className="relative py-12 sm:py-16 lg:py-20 particles-bg">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
                         <StatCard number={15} label="Currencies" suffix="+" />
                         <StatCard number={100} label="Accuracy" suffix="%" />
                         <StatCard number={24} label="Monitoring" suffix="/7" />

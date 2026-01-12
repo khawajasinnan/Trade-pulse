@@ -172,12 +172,12 @@ export default function PredictionsPage() {
                             <LoadingSpinner size="lg" />
                         </div>
                     ) : (
-                        <div className="grid md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                             {predictions.map((prediction, index) => (
                                 <Card
                                     key={prediction.currencyPair}
                                     variant="glass"
-                                    className={`animate-fade-in-up`}
+                                    className={`animate-fade-in-up hover-lift-lg shadow-premium`}
                                     style={{ animationDelay: `${index * 100}ms` }}
                                 >
                                     <div className="flex justify-between items-start mb-6">
@@ -191,16 +191,16 @@ export default function PredictionsPage() {
                                     </div>
 
                                     {/* Rates */}
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div className="p-4 bg-gray-50 rounded-lg">
+                                    <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                                        <div className="p-3 sm:p-4 bg-gray-50 rounded-lg">
                                             <p className="text-xs text-gray-600 mb-1">Current Rate</p>
-                                            <p className="text-2xl font-bold text-gray-900">
+                                            <p className="text-xl sm:text-2xl font-bold text-gray-900">
                                                 {prediction.currentRate.toFixed(4)}
                                             </p>
                                         </div>
-                                        <div className="p-4 bg-primary-50 rounded-lg">
+                                        <div className="p-3 sm:p-4 bg-primary-50 rounded-lg">
                                             <p className="text-xs text-gray-600 mb-1">Predicted Rate</p>
-                                            <p className="text-2xl font-bold text-primary-600">
+                                            <p className="text-xl sm:text-2xl font-bold text-primary-600">
                                                 {prediction.predictedRate.toFixed(4)}
                                             </p>
                                         </div>
@@ -210,14 +210,14 @@ export default function PredictionsPage() {
                                     <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                                         <div className="flex items-center gap-2">
                                             {prediction.change > 0 ? (
-                                                <TrendingUp className="w-5 h-5 text-success" />
+                                                <TrendingUp className="w-5 h-5 text-success animate-bounce-slow" />
                                             ) : prediction.change < 0 ? (
-                                                <TrendingDown className="w-5 h-5 text-danger" />
+                                                <TrendingDown className="w-5 h-5 text-danger animate-bounce-slow" />
                                             ) : (
                                                 <Minus className="w-5 h-5 text-neutral" />
                                             )}
                                             <span
-                                                className={`font-bold ${prediction.change > 0
+                                                className={`font-bold text-lg ${prediction.change > 0
                                                     ? 'text-success'
                                                     : prediction.change < 0
                                                         ? 'text-danger'
@@ -235,9 +235,9 @@ export default function PredictionsPage() {
                                                     {prediction.confidence}%
                                                 </p>
                                             </div>
-                                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                                            <div className="w-16 bg-gray-200 rounded-full h-2 overflow-hidden">
                                                 <div
-                                                    className="bg-primary-500 h-2 rounded-full transition-all"
+                                                    className="bg-gradient-to-r from-primary-500 to-accent-500 h-2 rounded-full transition-all duration-1000 animate-shimmer"
                                                     style={{ width: `${prediction.confidence}%` }}
                                                 />
                                             </div>

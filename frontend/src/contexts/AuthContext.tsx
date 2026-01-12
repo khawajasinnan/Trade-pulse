@@ -13,7 +13,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
     signup: (name: string, email: string, password: string, role?: string) => Promise<any>;
     logout: () => Promise<void>;
     loginWithToken: (token: string) => Promise<void>;
@@ -35,13 +35,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkAuth = async () => {
         try {
-            const token = localStorage.getItem('token');
+            // Check both sessionStorage and localStorage for token
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
             if (token) {
                 const response = await authAPI.getCurrentUser();
                 setUser(response.data.user);
             }
         } catch (error) {
             console.error('Auth check failed:', error);
+            // Clear both storage types on auth failure
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
         } finally {
@@ -49,13 +53,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const login = async (email: string, password: string) => {
+    const login = async (email: string, password: string, rememberMe: boolean = false) => {
         try {
             const response = await authAPI.login({ email, password });
             const { user, token } = response.data;
 
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            // Use localStorage if rememberMe is true, otherwise use sessionStorage
+            const storage = rememberMe ? localStorage : sessionStorage;
+            storage.setItem('token', token);
+            storage.setItem('user', JSON.stringify(user));
             setUser(user);
         } catch (error: any) {
             throw new Error(error.response?.data?.error || 'Login failed');
@@ -99,6 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
+            // Clear both storage types to ensure complete logout
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             setUser(null);

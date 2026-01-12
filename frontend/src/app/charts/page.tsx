@@ -235,17 +235,19 @@ export default function ChartsPage() {
 
                     {/* Controls */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-                        <Card variant="glass" className="p-4 sm:p-6">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Currency Pair</label>
+                        {/* Currency Pair Selector */}
+                        <Card variant="glass" className="animate-slide-up hover-lift-lg">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Currency Pair</h3>
                             <div className="flex flex-wrap gap-2">
-                                {currencyPairs.map((pair) => (
+                                {currencyPairs.map((pair, index) => (
                                     <button
                                         key={pair}
                                         onClick={() => setSelectedPair(pair)}
-                                        className={`px-4 py-2 rounded-lg font-medium transition-all currency-cursor ${selectedPair === pair
-                                            ? 'bg-primary-500 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-all currency-cursor animate-scale-in ${selectedPair === pair
+                                            ? 'bg-primary-500 text-white shadow-premium scale-105'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
                                             }`}
+                                        style={{ animationDelay: `${index * 0.05}s` }}
                                     >
                                         {pair}
                                     </button>
@@ -253,17 +255,19 @@ export default function ChartsPage() {
                             </div>
                         </Card>
 
-                        <Card variant="glass">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Timeframe</label>
+                        {/* Timeframe Selector */}
+                        <Card variant="glass" className="animate-slide-up stagger-1 hover-lift-lg">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Timeframe</h3>
                             <div className="flex flex-wrap gap-2">
-                                {timeframes.map((tf) => (
+                                {timeframes.map((tf, index) => (
                                     <button
                                         key={tf}
                                         onClick={() => setTimeframe(tf)}
-                                        className={`px-4 py-2 rounded-lg font-medium transition-all currency-cursor ${timeframe === tf
-                                            ? 'bg-accent-500 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-all currency-cursor animate-scale-in ${timeframe === tf
+                                            ? 'bg-accent-500 text-white shadow-premium scale-105'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
                                             }`}
+                                        style={{ animationDelay: `${index * 0.05}s` }}
                                     >
                                         {tf}
                                     </button>
@@ -298,7 +302,7 @@ export default function ChartsPage() {
                     {/* Line Chart */}
                     <Card variant="glass" className="mb-6 p-4 sm:p-6">
                         <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Price Trend</h3>
-                        <ResponsiveContainer width="100%" height={400}>
+                        <ResponsiveContainer width="100%" height={300} className="sm:h-[400px]">
                             <LineChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                 <XAxis
@@ -335,7 +339,7 @@ export default function ChartsPage() {
                     {/* Candlestick Chart */}
                     <Card variant="glass" className="mb-6 p-4 sm:p-6">
                         <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Candlestick Chart</h3>
-                        <ResponsiveContainer width="100%" height={400}>
+                        <ResponsiveContainer width="100%" height={300} className="sm:h-[400px]">
                             <BarChart data={candlestickData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                 <XAxis
@@ -421,7 +425,7 @@ export default function ChartsPage() {
                     </Card>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
                         <Card variant="glass">
                             <p className="text-sm text-gray-600 mb-1">24h High</p>
                             <p className="text-2xl font-bold text-gray-900">

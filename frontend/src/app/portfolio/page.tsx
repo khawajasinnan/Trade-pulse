@@ -210,7 +210,7 @@ export default function PortfolioPage() {
                                     <Card
                                         key={holding.currency}
                                         variant="glass"
-                                        className="animate-fade-in-up"
+                                        className="animate-bounce-in hover-lift-lg shadow-premium"
                                         style={{ animationDelay: `${index * 100}ms` }}
                                     >
                                         <div className="flex justify-between items-start mb-4">
@@ -219,7 +219,7 @@ export default function PortfolioPage() {
                                                 <p className="text-sm text-gray-600">{holding.amount.toFixed(0)} units</p>
                                             </div>
                                             <div className={`px-3 py-1 rounded-lg text-sm font-bold ${holding.profitLoss >= 0
-                                                ? 'bg-success-light/30 text-success'
+                                                ? 'bg-success-light/30 text-success animate-glow-pulse'
                                                 : 'bg-danger-light/30 text-danger'
                                                 }`}>
                                                 {holding.profitLoss >= 0 ? '+' : ''}{holding.profitLossPercent.toFixed(2)}%
@@ -254,45 +254,49 @@ export default function PortfolioPage() {
                             {/* Transaction History */}
                             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Recent Transactions</h2>
                             <Card variant="glass">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-200">
-                                                <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
-                                                <th className="text-left py-3 px-4 font-semibold text-gray-700">Currency</th>
-                                                <th className="text-right py-3 px-4 font-semibold text-gray-700">Amount</th>
-                                                <th className="text-right py-3 px-4 font-semibold text-gray-700">Price</th>
-                                                <th className="text-right py-3 px-4 font-semibold text-gray-700">Total</th>
-                                                <th className="text-right py-3 px-4 font-semibold text-gray-700">Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {transactions.map((tx) => (
-                                                <tr key={tx.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                                                    <td className="py-3 px-4">
-                                                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm font-bold ${tx.type === 'BUY'
-                                                            ? 'bg-success-light/30 text-success'
-                                                            : 'bg-danger-light/30 text-danger'
-                                                            }`}>
-                                                            {tx.type === 'BUY' ? (
-                                                                <ArrowDownRight className="w-4 h-4" />
-                                                            ) : (
-                                                                <ArrowUpRight className="w-4 h-4" />
-                                                            )}
-                                                            {tx.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-3 px-4 font-medium">{tx.currency}</td>
-                                                    <td className="py-3 px-4 text-right">{tx.amount.toFixed(0)}</td>
-                                                    <td className="py-3 px-4 text-right">${tx.price.toFixed(4)}</td>
-                                                    <td className="py-3 px-4 text-right font-bold">${tx.total.toFixed(2)}</td>
-                                                    <td className="py-3 px-4 text-right text-sm text-gray-600">
-                                                        {new Date(tx.timestamp).toLocaleDateString()}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                    <div className="inline-block min-w-full align-middle">
+                                        <div className="overflow-hidden">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Type</th>
+                                                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Currency</th>
+                                                        <th className="text-right py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Amount</th>
+                                                        <th className="text-right py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Price</th>
+                                                        <th className="text-right py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Total</th>
+                                                        <th className="text-right py-3 px-2 sm:px-4 font-semibold text-gray-700 text-xs sm:text-sm whitespace-nowrap">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-100">
+                                                    {transactions.map((tx) => (
+                                                        <tr key={tx.id} className="hover:bg-gray-50 transition">
+                                                            <td className="py-3 px-2 sm:px-4 whitespace-nowrap">
+                                                                <span className={`inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold ${tx.type === 'BUY'
+                                                                    ? 'bg-success-light/30 text-success'
+                                                                    : 'bg-danger-light/30 text-danger'
+                                                                    }`}>
+                                                                    {tx.type === 'BUY' ? (
+                                                                        <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                                    ) : (
+                                                                        <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                                    )}
+                                                                    <span className="hidden sm:inline">{tx.type}</span>
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm whitespace-nowrap">{tx.currency}</td>
+                                                            <td className="py-3 px-2 sm:px-4 text-right text-xs sm:text-sm whitespace-nowrap">{tx.amount.toFixed(0)}</td>
+                                                            <td className="py-3 px-2 sm:px-4 text-right text-xs sm:text-sm whitespace-nowrap">${tx.price.toFixed(4)}</td>
+                                                            <td className="py-3 px-2 sm:px-4 text-right font-bold text-xs sm:text-sm whitespace-nowrap">${tx.total.toFixed(2)}</td>
+                                                            <td className="py-3 px-2 sm:px-4 text-right text-xs text-gray-600 whitespace-nowrap">
+                                                                {new Date(tx.timestamp).toLocaleDateString()}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </Card>
                         </>

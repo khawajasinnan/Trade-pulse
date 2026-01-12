@@ -147,15 +147,6 @@ export default function Navbar() {
                                 </Link>
                             );
                         })}
-
-                        {/* Direct Logout Button */}
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200 ml-2 currency-cursor"
-                        >
-                            <LogOut className="w-4 h-4" />
-                            <span className="font-medium text-sm">Logout</span>
-                        </button>
                     </div>
 
                     {/* User Menu */}

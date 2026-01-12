@@ -7,6 +7,7 @@ import { dashboardAPI } from '../../services/api.service';
 import Navbar from '../../components/Navbar';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { TrendingUp, TrendingDown, RefreshCw, AlertCircle, FileDown } from 'lucide-react';
+import { DashboardSkeleton } from '../../components/Skeleton';
 
 interface LiveRate {
     pair: string;
@@ -233,36 +234,33 @@ export default function DashboardPage() {
 
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                     {error && (
-                        <div className="mb-6 p-4 bg-danger-light/20 border border-danger rounded-lg flex items-start gap-3">
+                        <div className="mb-6 p-4 bg-danger-light/20 border border-danger rounded-lg flex items-start gap-3 animate-fade-in-up">
                             <AlertCircle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
                             <p className="text-sm text-danger">{error}</p>
                         </div>
                     )}
 
-                    {/* Market Summary */}
-                    {data && (
+                    {/* Show skeleton loading */}
+                    {loading && <DashboardSkeleton />}
+
+                    {/* Market Summary with Staggered Animation */}
+                    {data && !loading && (
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-                                <SummaryCard
-                                    title="Total Pairs"
-                                    value={data.stats.totalPairs}
-                                    color="blue"
-                                />
-                                <SummaryCard
-                                    title="Positive Movers"
-                                    value={data.stats.positiveMovers}
-                                    color="green"
-                                />
-                                <SummaryCard
-                                    title="Negative Movers"
-                                    value={data.stats.negativeMovers}
-                                    color="red"
-                                />
-                                <SummaryCard
-                                    title="Market Sentiment"
-                                    value={data.stats.sentiment}
-                                    color={data.stats.sentiment === 'POSITIVE' ? 'green' : data.stats.sentiment === 'NEGATIVE' ? 'red' : 'blue'}
-                                />
+                                {[
+                                    { title: "Total Pairs", value: data.stats.totalPairs, color: "blue", delay: 0 },
+                                    { title: "Positive Movers", value: data.stats.positiveMovers, color: "green", delay: 0.1 },
+                                    { title: "Negative Movers", value: data.stats.negativeMovers, color: "red", delay: 0.2 },
+                                    { title: "Market Sentiment", value: data.stats.sentiment, color: data.stats.sentiment === 'POSITIVE' ? 'green' : data.stats.sentiment === 'NEGATIVE' ? 'red' : 'blue', delay: 0.3 },
+                                ].map((item, index) => (
+                                    <div
+                                        key={index}
+                                        className="animate-bounce-in hover-lift-lg"
+                                        style={{ animationDelay: `${item.delay}s` }}
+                                    >
+                                        <SummaryCard {...item} />
+                                    </div>
+                                ))}
                             </div>
 
                             {/* Top Movers */}
@@ -311,20 +309,24 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Live Rates Grid */}
-                            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+                            <div className="bg-white rounded-xl shadow-premium p-4 sm:p-6">
                                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Live Currency Rates</h2>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                                     {data.currencyPairs.map((rate: any, index: number) => (
-                                        <div key={index} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition">
+                                        <div
+                                            key={index}
+                                            className="card p-4 border-gray-200 border animate-slide-up hover-lift-lg shadow-premium"
+                                            style={{ animationDelay: `${index * 0.05}s` }}
+                                        >
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
                                                     <div className="font-bold text-gray-900">{rate.pair || rate.currencyPair || 'N/A'}</div>
                                                     <div className="text-sm text-gray-600">{rate.name}</div>
                                                 </div>
                                                 {rate.trend === 'up' ? (
-                                                    <TrendingUp className="w-5 h-5 text-success" />
+                                                    <TrendingUp className="w-5 h-5 text-success animate-bounce" />
                                                 ) : rate.trend === 'down' ? (
-                                                    <TrendingDown className="w-5 h-5 text-danger" />
+                                                    <TrendingDown className="w-5 h-5 text-danger animate-bounce" />
                                                 ) : null}
                                             </div>
                                             <div className="text-2xl font-bold text-gray-900">${rate.currentRate?.toFixed(4) || 'N/A'}</div>
@@ -356,7 +358,7 @@ function SummaryCard({ title, value, color }: { title: string; value: string | n
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white rounded-xl shadow-premium p-6 hover:shadow-glow-emerald hover:scale-105 transition-all duration-300">
             <div className="text-sm text-gray-600 mb-2">{title}</div>
             <div className={`text-3xl font-bold capitalize ${colorClasses[color as keyof typeof colorClasses]}`}>
                 {value}

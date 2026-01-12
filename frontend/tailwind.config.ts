@@ -88,6 +88,9 @@ const config: Config = {
                 'glow-noon': '0 0 20px rgba(1, 90, 132, 0.4)',
                 'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
                 'glass-lg': '0 20px 60px 0 rgba(31, 38, 135, 0.2)',
+                'premium': '0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                'premium-lg': '0 20px 60px -15px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                'inner-glow': 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.06)',
             },
             backgroundImage: {
                 'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -95,6 +98,10 @@ const config: Config = {
                 'gradient-seashell': 'linear-gradient(135deg, #F1EDEA 0%, #FCFAF9 100%)',
                 'gradient-noon': 'linear-gradient(135deg, #015A84 0%, #38bdf8 100%)',
                 'gradient-mesh': 'linear-gradient(135deg, #05B084 0%, #F1EDEA 50%, #015A84 100%)',
+                'gradient-vibrant': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'gradient-sunset': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'gradient-ocean': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'shimmer-gradient': 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
             },
             backdropBlur: {
                 xs: '2px',
@@ -110,6 +117,9 @@ const config: Config = {
                 'scale-in': 'scaleIn 0.3s ease-out',
                 'float': 'float 3s ease-in-out infinite',
                 'shimmer': 'shimmer 2s linear infinite',
+                'bounce-in': 'bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+                'slide-up': 'slideUp 0.5s ease-out',
+                'glow-pulse': 'glowPulseAdvanced 2s ease-in-out infinite',
             },
             keyframes: {
                 fadeIn: {
