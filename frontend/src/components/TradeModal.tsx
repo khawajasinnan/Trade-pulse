@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { portfolioAPI } from '../services/api.service';
 import Card from './Card';
 import { X, TrendingUp, TrendingDown, DollarSign, AlertCircle } from 'lucide-react';
 
@@ -71,23 +72,11 @@ export default function TradeModal({ isOpen, onClose, onSuccess, defaultCurrency
         setIsSubmitting(true);
 
         try {
-            const response = await fetch('/api/portfolio', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    currency: selectedCurrency,
-                    amount: tradeType === 'BUY' ? tradeAmount : -tradeAmount,
-                    purchasePrice: liveRate,
-                }),
+            const response = await portfolioAPI.addToPortfolio({
+                currency: selectedCurrency,
+                amount: tradeType === 'BUY' ? tradeAmount : -tradeAmount,
+                purchasePrice: liveRate,
             });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to place trade');
-            }
 
             showSuccess(`${tradeType} order for ${selectedCurrency} placed successfully!`);
             onSuccess();

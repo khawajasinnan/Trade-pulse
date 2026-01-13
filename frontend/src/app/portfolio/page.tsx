@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { portfolioAPI } from '../../services/api.service';
 import Navbar from '../../components/Navbar';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import UpgradePrompt from '../../components/UpgradePrompt';
@@ -43,15 +44,8 @@ export default function PortfolioPage() {
         setLoading(true);
         try {
             // Fetch portfolio from backend API
-            const response = await fetch('/api/portfolio', {
-                credentials: 'include',
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch portfolio');
-            }
-
-            const data = await response.json();
+            const response = await portfolioAPI.getPortfolio();
+            const data = response.data;
 
             // Transform backend data to frontend format
             if (data.holdings) {
@@ -68,7 +62,7 @@ export default function PortfolioPage() {
                 setHoldings(transformedHoldings);
             }
 
-            // Fetch recent transactions (mock for now - can be added to backend later)
+            // Mock transactions for demo (can be added to backend later)
             setTransactions([
                 {
                     id: '1',
